@@ -25,7 +25,7 @@ class LocalRecordsCPLivePlugin implements CallbackListener, TimerListener, Plugi
     * Constants
     */
     const PLUGIN_ID      = 115;
-    const PLUGIN_VERSION = 0.2;
+    const PLUGIN_VERSION = 0.21;
     const PLUGIN_NAME    = 'LocalRecordsCPLivePlugin';
     const PLUGIN_AUTHOR  = 'jonthekiller';
 
@@ -115,6 +115,7 @@ class LocalRecordsCPLivePlugin implements CallbackListener, TimerListener, Plugi
         $this->maniaControl->getCallbackManager()->registerCallbackListener(Callbacks::BEGINMAP, $this, 'handleBeginMapCallback');
         $this->maniaControl->getCallbackManager()->registerCallbackListener(Callbacks::TM_ONWAYPOINT, $this, 'handleCheckpointCallback');
         $this->maniaControl->getCallbackManager()->registerCallbackListener(PlayerManager::CB_PLAYERCONNECT, $this, 'handlePlayerConnect');
+        $this->maniaControl->getCallbackManager()->registerCallbackListener(PlayerManager::CB_PLAYERDISCONNECT, $this, 'handlePlayerDisconnect');
         $this->maniaControl->getCallbackManager()->registerCallbackListener(PlayerManager::CB_PLAYERINFOCHANGED, $this, 'handlePlayerInfoChanged');
         $this->maniaControl->getCallbackManager()->registerCallbackListener(Callbacks::ENDMAP, $this, 'handleEndMapCallback');
 
@@ -189,6 +190,13 @@ class LocalRecordsCPLivePlugin implements CallbackListener, TimerListener, Plugi
     {
         if($this->active){
             $this->initTimes($player);
+        }
+    }
+
+    public function handlePlayerDisconnect(Player $player)
+    {
+        if($this->active){
+            $this->spectateview[$player->login] = -1;
         }
     }
 
