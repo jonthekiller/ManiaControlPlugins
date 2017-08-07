@@ -10,6 +10,7 @@ use ManiaControl\Callbacks\CallbackListener;
 use ManiaControl\Callbacks\Callbacks;
 use ManiaControl\Callbacks\Structures\TrackMania\OnWayPointEventStructure;
 use ManiaControl\Callbacks\TimerListener;
+use ManiaControl\Logger;
 use ManiaControl\ManiaControl;
 use ManiaControl\Players\Player;
 use ManiaControl\Players\PlayerManager;
@@ -24,7 +25,7 @@ class LocalRecordsCPLivePlugin implements CallbackListener, TimerListener, Plugi
     * Constants
     */
     const PLUGIN_ID      = 115;
-    const PLUGIN_VERSION = 0.13;
+    const PLUGIN_VERSION = 0.2;
     const PLUGIN_NAME    = 'LocalRecordsCPLivePlugin';
     const PLUGIN_AUTHOR  = 'jonthekiller';
 
@@ -46,6 +47,7 @@ class LocalRecordsCPLivePlugin implements CallbackListener, TimerListener, Plugi
     private $LocalRecordsPlugin = "";
     private $toprecord = array();
     private $playersrecords = array();
+    private $spectateview = array();
 
     /**
      * @see \ManiaControl\Plugins\Plugin::prepare()
@@ -134,6 +136,7 @@ class LocalRecordsCPLivePlugin implements CallbackListener, TimerListener, Plugi
             if($this->LocalRecordsPlugin)
             {
                 $this->active = true;
+                Logger::log("Can load LRCPLive plugin");
             }else{
                 $this->maniaControl->getChat()->sendErrorToAdmins('Please activate first the LocalRecords plugin');
             }
@@ -191,6 +194,9 @@ class LocalRecordsCPLivePlugin implements CallbackListener, TimerListener, Plugi
 
     public function handlePlayerInfoChanged(Player $player) {
         $this->closeWidget(self::MLID_LRCPLIVE_WIDGET, $player->login);
+//        Logger::log("Current Target: " . $player->currentTargetId . " for " . $player->pid);
+        $this->spectateview[$player->login] = $player->currentTargetId;
+
     }
 
     public function handleBeginMapCallback()
@@ -372,6 +378,15 @@ class LocalRecordsCPLivePlugin implements CallbackListener, TimerListener, Plugi
 
         // Send manialink
         $this->maniaControl->getManialinkManager()->sendManialink($maniaLink, $player->login);
+
+        //Send also to spectators
+        foreach ($this->spectateview as $spectatorlogin => $targetId) {
+
+//            Logger::log($spectatorlogin . " spec " .$targetId);
+            if ($targetId == $player->pid) {
+                $this->maniaControl->getManialinkManager()->sendManialink($maniaLink, $spectatorlogin);
+            }
+        }
     }
 
     public function handleCheckpointCallback(OnWayPointEventStructure $structure){
