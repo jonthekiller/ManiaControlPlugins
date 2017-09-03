@@ -36,7 +36,7 @@ class MatchPlugin implements ManialinkPageAnswerListener, CallbackListener, Comm
 {
 
     const PLUGIN_ID = 119;
-    const PLUGIN_VERSION = 0.1;
+    const PLUGIN_VERSION = 0.2;
     const PLUGIN_NAME = 'MatchPlugin';
     const PLUGIN_AUTHOR = 'jonthekiller';
 
@@ -66,6 +66,8 @@ class MatchPlugin implements ManialinkPageAnswerListener, CallbackListener, Comm
     const SETTING_MATCH_READY_NBPLAYERS = 'Ready Button-Minimal number of players before start';
     const ACTION_READY = 'ReadyButton.Action';
     const TABLE_ROUNDS = 'drakonia_rounds';
+    const TABLE_MATCHS = 'drakonia_matchs';
+    const SETTING_MATCH_FORCESHOWOPPONENTS = 'Force Show Opponents';
 
     const DEFAULT_TRACKMANIALIVE_PLUGIN = 'Drakonia\TrackmaniaLivePlugin';
 
@@ -92,6 +94,8 @@ class MatchPlugin implements ManialinkPageAnswerListener, CallbackListener, Comm
     private $matchrecover = false;
     private $restorepoints = false;
     private $fakeround = false;
+    private $scores = "";
+    private $type = "";
 
     private $player1_playerlogin = "";
     private $player2_playerlogin = "";
@@ -106,6 +110,8 @@ class MatchPlugin implements ManialinkPageAnswerListener, CallbackListener, Comm
     private $playercount = 0;
     private $nbwinners = 0;
     private $matchSettings = array();
+    private $playerswinner = array();
+    private $playersfinalist = array();
 
     /**
      * @see \ManiaControl\Plugins\Plugin::prepare()
@@ -201,6 +207,7 @@ class MatchPlugin implements ManialinkPageAnswerListener, CallbackListener, Comm
         $this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_MATCH_READY_HEIGHT, 6);
         $this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_MATCH_READY_NBPLAYERS, 2);
         $this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_MATCH_MAPLIST, "Drakonia_Cup.txt");
+        $this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_MATCH_FORCESHOWOPPONENTS, true);
 
         $this->maniaControl->getManialinkManager()->registerManialinkPageAnswerListener(
             self::ACTION_READY,
@@ -352,6 +359,20 @@ class MatchPlugin implements ManialinkPageAnswerListener, CallbackListener, Comm
         if ($mysqli->error) {
             trigger_error($mysqli->error, E_USER_ERROR);
         }
+
+        $query = "CREATE TABLE IF NOT EXISTS `".self::TABLE_MATCHS."` (
+				`id` INT(11) NOT NULL AUTO_INCREMENT,
+                `type` varchar(10) NOT NULL DEFAULT 'Cup',
+                `score` text,
+                `srvlogin` varchar(40) DEFAULT NULL,
+                `mapname` varchar(255) DEFAULT NULL,
+                `synchro` tinyint(1) NOT NULL DEFAULT '0',
+				PRIMARY KEY (`id`)
+				) ENGINE=MyISAM DEFAULT CHARSET=utf8 COLLATE=utf8_unicode_ci AUTO_INCREMENT=1;";
+        $mysqli->query($query);
+        if ($mysqli->error) {
+            trigger_error($mysqli->error, E_USER_ERROR);
+        }
     }
 
     /**
@@ -416,6 +437,16 @@ class MatchPlugin implements ManialinkPageAnswerListener, CallbackListener, Comm
         return $this->nbrounds;
     }
 
+    public function getPlayersWinner()
+    {
+        return $this->playerswinner;
+    }
+
+    public function getPlayersFinalist()
+    {
+        return $this->playersfinalist;
+    }
+
     public function getMatchPointsLimit()
     {
         return $this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_MATCH_MATCH_POINTS);
@@ -447,6 +478,11 @@ class MatchPlugin implements ManialinkPageAnswerListener, CallbackListener, Comm
         $this->maniaControl->getChat()->sendChat(
             '$<$0f0$o Player $z'.$player->nickname.' $z$o$0f0has now '.$text[2].' points!$>'
         );
+
+        $this->livePlugin = $this->maniaControl->getPluginManager()->getPlugin(self::DEFAULT_TRACKMANIALIVE_PLUGIN);
+        if ($this->livePlugin) {
+            $this->livePlugin->SetPoints($player, $text[2]);
+        }
     }
 
 
@@ -524,12 +560,19 @@ class MatchPlugin implements ManialinkPageAnswerListener, CallbackListener, Comm
                                         self::SETTING_MATCH_MATCH_POINTS
                                     )) AND ($roundpoints == 10)
                             ) {
-                                //Logger::log("Winner");
+//                                Logger::log("Winner");
                                 $points = ($points + ($this->maniaControl->getSettingManager()->getSettingValue(
                                                 $this,
                                                 self::SETTING_MATCH_MATCH_NBWINNERS
                                             ) - $this->nbwinners)) - $roundpoints;
                                 $this->nbwinners++;
+
+
+                                $this->playerswinner = array_merge($this->playerswinner, array("$login"));
+                                $this->playerswinner = array_unique($this->playerswinner);
+                                $this->playersfinalist = array_diff($this->playersfinalist, ["$login"]);
+
+
                             } elseif (($points + $roundpoints) >= $this->maniaControl->getSettingManager(
                                 )->getSettingValue(
                                     $this,
@@ -539,15 +582,20 @@ class MatchPlugin implements ManialinkPageAnswerListener, CallbackListener, Comm
                                         self::SETTING_MATCH_MATCH_POINTS
                                     ))
                             ) {
-                                //Logger::log("Finalist");
+//                                Logger::log("Finalist");
                                 $points = $this->maniaControl->getSettingManager()->getSettingValue(
                                         $this,
                                         self::SETTING_MATCH_MATCH_POINTS
                                     ) - $roundpoints;
+                                $this->playersfinalist = array_merge($this->playersfinalist, array("$login"));
+                                $this->playersfinalist = array_unique($this->playersfinalist);
                             }
 
                             Logger::log($rank.", ".$login.", ".($points + $roundpoints).", ".$roundpoints);
                             $database .= $rank.", ".$login.", ".($points + $roundpoints)."".PHP_EOL;
+
+                            $this->type = "Cup";
+
                         } elseif ($this->maniaControl->getSettingManager()->getSettingValue(
                                 $this,
                                 self::SETTING_MATCH_MATCH_MODE
@@ -556,10 +604,29 @@ class MatchPlugin implements ManialinkPageAnswerListener, CallbackListener, Comm
                             $time = $result->getBestRaceTime();
                             Logger::log($rank.", ".$login.", ".$time);
                             $database .= $rank.", ".$login.", ".$time."".PHP_EOL;
+
+                            $this->type = "TA";
+
+                            $mapname = $this->maniaControl->getMapManager()->getCurrentMap();
+                            $mysqli = $this->maniaControl->getDatabase()->getMysqli();
+                            $server = $this->maniaControl->getServer()->login;
+                            $query = "INSERT INTO `".self::TABLE_MATCHS."`
+                            (`type`,`score`,`srvlogin`,`mapname`)
+                            VALUES
+                            ('$this->type','$this->scores','$server','$mapname->name')";
+                            //Logger::log($query);
+                            $mysqli->query($query);
+                            if ($mysqli->error) {
+                                trigger_error($mysqli->error);
+
+                                return false;
+                            }
+
                         }
                     }
 
                 }
+//                Logger::log('Count number of players finish: '. count($this->times));
 
                 if ((count($this->times) > 0 && $this->maniaControl->getSettingManager()->getSettingValue(
                             $this,
@@ -577,6 +644,9 @@ class MatchPlugin implements ManialinkPageAnswerListener, CallbackListener, Comm
                 $mysqli = $this->maniaControl->getDatabase()->getMysqli();
                 $server = $this->maniaControl->getServer()->login;
 
+                $this->scores = $database;
+
+
                 $query = "INSERT INTO `".self::TABLE_ROUNDS."`
 				(`server`, `rounds`)
 				VALUES
@@ -589,6 +659,8 @@ class MatchPlugin implements ManialinkPageAnswerListener, CallbackListener, Comm
                     return false;
                 }
                 $this->alreadydone = true;
+
+
 
                 //Logger::log("Rounds finished: " . $this->nbrounds);
             }
@@ -720,6 +792,9 @@ class MatchPlugin implements ManialinkPageAnswerListener, CallbackListener, Comm
                     ) == $this->nbwinners
                 ) {
                     $this->MatchEnd();
+                }elseif(count($this->playerswinner) == $this->maniaControl->getSettingManager()->getSettingValue($this,self::SETTING_MATCH_MATCH_NBWINNERS) AND count($this->playerswinner) > 0)
+                {
+                    $this->MatchEnd();
                 }
 
             }
@@ -746,6 +821,24 @@ class MatchPlugin implements ManialinkPageAnswerListener, CallbackListener, Comm
             if ($this->livePlugin) {
                 $this->livePlugin->MatchEnd();
             }
+
+
+            if($this->type == "Cup") {
+                $mysqli = $this->maniaControl->getDatabase()->getMysqli();
+                $server = $this->maniaControl->getServer()->login;
+                $query = "INSERT INTO `".self::TABLE_MATCHS."`
+				(`type`,`score`,`srvlogin`)
+				VALUES
+				('$this->type','$this->scores','$server')";
+                //Logger::log($query);
+                $mysqli->query($query);
+                if ($mysqli->error) {
+                    trigger_error($mysqli->error);
+
+                    return false;
+                }
+            }
+
             $this->loadScript($scriptName, $loadedSettings);
             $this->maniaControl->getChat()->sendSuccess("Match finished");
             Logger::log("Match finished");
@@ -857,11 +950,13 @@ class MatchPlugin implements ManialinkPageAnswerListener, CallbackListener, Comm
 
                     if ($continue && $this->nbmaps < $this->settings_nbmapsbymatch) {
                         if ($current) {
-                            //$this->maniaControl->getChat()->sendChat('$<$fff$o$i>>>Next Maps$>');
+                            $this->maniaControl->getChat()->sendChat('$<$fff$o$i>>>Next Maps$>');
                             $current = false;
                         } elseif (($this->nbmaps + $i) <= ($this->settings_nbmapsbymatch)) {
                             Logger::log("Map ".$i.": ".Formatter::stripDirtyCodes($map->name));
-                            //$this->maniaControl->getChat()->sendChat('$<$fff$o$i' . $i . ': ' . Formatter::stripDirtyCodes($map->name) . '$>');
+                            $this->maniaControl->getChat()->sendChat(
+                                '$<$fff$o$i'.$i.': '.Formatter::stripDirtyCodes($map->name).'$>'
+                            );
                             $nbmaps = $this->maniaControl->getMapManager()->getMapsCount();
                             $i++;
                             if ($this->nbmaps == ($nbmaps - ($i - 1) + 1) OR $this->settings_nbmapsbymatch == (($i - 1) + $this->nbmaps - 1)) {
@@ -897,6 +992,8 @@ class MatchPlugin implements ManialinkPageAnswerListener, CallbackListener, Comm
         Logger::log("Match start with script ".$scriptName.'!');
 
 
+
+
         $this->maniaControl->getTimerManager()->registerOneTimeListening(
             $this,
             function () use (&$player) {
@@ -906,6 +1003,10 @@ class MatchPlugin implements ManialinkPageAnswerListener, CallbackListener, Comm
                     self::SETTING_MATCH_MATCH_MODE
                 );
                 $scriptName .= '.Script.txt';
+
+
+//                Logger::log("1");
+
 
                 if ($this->maniaControl->getSettingManager()->getSettingValue(
                         $this,
@@ -997,6 +1098,9 @@ class MatchPlugin implements ManialinkPageAnswerListener, CallbackListener, Comm
 
                 try {
 
+
+                    $this->playerswinner = array();
+
                     $this->livePlugin = $this->maniaControl->getPluginManager()->getPlugin(
                         self::DEFAULT_TRACKMANIALIVE_PLUGIN
                     );
@@ -1004,6 +1108,8 @@ class MatchPlugin implements ManialinkPageAnswerListener, CallbackListener, Comm
 //                Logger::log("Call MatchStart Live");
                         $this->livePlugin->MatchStart();
                     }
+
+//                    Logger::log("2");
 
 
                     $maplist = $this->maniaControl->getSettingManager()->getSettingValue(
@@ -1015,8 +1121,21 @@ class MatchPlugin implements ManialinkPageAnswerListener, CallbackListener, Comm
 
                     $this->maniaControl->getMapManager()->restructureMapList();
 
+                    $forceshowopponents = (boolean)$this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_MATCH_FORCESHOWOPPONENTS);
 
-//            $this->maniaControl->getMapManager()->shuffleMapList();
+                    if($forceshowopponents)
+                    {
+                        Logger::log("Force Show Opponents");
+                        $this->maniaControl->getClient()->setForceShowAllOpponents(1);
+                    }else{
+                        Logger::log("Allow Hide Opponents");
+                        $this->maniaControl->getClient()->setForceShowAllOpponents(0);
+                    }
+
+
+//                    Logger::log("3");
+
+                    $this->maniaControl->getMapManager()->shuffleMapList();
                     $this->loadScript($scriptName, $loadedSettings);
                     $this->maniaControl->getModeScriptEventManager()->setTrackmaniaPointsRepartition(
                         $pointsrepartition
@@ -1035,6 +1154,7 @@ class MatchPlugin implements ManialinkPageAnswerListener, CallbackListener, Comm
                         $this->handlePlayerConnect($player);
                     }
 
+//                    Logger::log("4");
 
                     $this->maniaControl->getMapManager()->getMapActions()->skipMap();
 
@@ -1045,6 +1165,7 @@ class MatchPlugin implements ManialinkPageAnswerListener, CallbackListener, Comm
             },
             2000
         );
+
     }
 
     public function onCommandMatchRecover(array $chatCallback, Player $player)
