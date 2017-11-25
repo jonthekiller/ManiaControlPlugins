@@ -13,6 +13,7 @@ use ManiaControl\Callbacks\Callbacks;
 use ManiaControl\Callbacks\Structures\Common\BasePlayerTimeStructure;
 use ManiaControl\Callbacks\Structures\TrackMania\OnWayPointEventStructure;
 use ManiaControl\Callbacks\TimerListener;
+use ManiaControl\Logger;
 use ManiaControl\ManiaControl;
 use ManiaControl\Manialinks\ManialinkPageAnswerListener;
 use ManiaControl\Players\Player;
@@ -35,7 +36,7 @@ class CheckpointsLivePlugin implements ManialinkPageAnswerListener, CallbackList
 	 * Constants
 	 */
 	const PLUGIN_ID      = 111;
-	const PLUGIN_VERSION = 0.23;
+	const PLUGIN_VERSION = 0.24;
 	const PLUGIN_NAME    = 'CheckpointsLivePlugin';
 	const PLUGIN_AUTHOR  = 'jonthekiller';
 
@@ -130,7 +131,11 @@ class CheckpointsLivePlugin implements ManialinkPageAnswerListener, CallbackList
 
         $this->maniaControl->getCallbackManager()->registerCallbackListener(CallbackManager::CB_MP_PLAYERMANIALINKPAGEANSWER, $this, 'handleSpec');
 
-
+//        $callback = $this->maniaControl->getModeScriptEventManager()->getListOfDisabledCallbacks();
+//        var_dump($callback);
+        $this->maniaControl->getModeScriptEventManager()->blockCallback("Trackmania.Event.WayPoint");
+//        $callback = $this->maniaControl->getModeScriptEventManager()->getListOfDisabledCallbacks();
+//        var_dump($callback);
 
         // Settings
 		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_CHECKPOINTS_LIVE_ACTIVATED, true);
@@ -481,6 +486,7 @@ class CheckpointsLivePlugin implements ManialinkPageAnswerListener, CallbackList
 
     public function handleCheckpointCallback(OnWayPointEventStructure $structure){
 
+        Logger::log("CP");
         if($this->active){
             $this->updateRanking($structure);
         }
@@ -501,9 +507,14 @@ class CheckpointsLivePlugin implements ManialinkPageAnswerListener, CallbackList
                 case self::ACTION_SPEC:
                     $adminLogin = $callback[1][1];
                     $targetLogin = $actionArray[2];
-                    $player = $this->maniaControl->getPlayerManager()->getPlayer($adminLogin);
-                    if ($player->isSpectator) {
-                        $this->maniaControl->getClient()->forceSpectatorTarget($adminLogin, $targetLogin, -1);
+                    foreach ($this->maniaControl->getPlayerManager()->getPlayers() as $players) {
+                        if ($targetLogin == $players->login && !$players->isSpectator && !$players->isTemporarySpectator && !$players->isFakePlayer() && $players->isConnected) {
+
+                            $player = $this->maniaControl->getPlayerManager()->getPlayer($adminLogin);
+                            if ($player->isSpectator) {
+                                $this->maniaControl->getClient()->forceSpectatorTarget($adminLogin, $targetLogin, -1);
+                            }
+                        }
                     }
             }
         }
