@@ -14,6 +14,7 @@ use ManiaControl\Callbacks\CallbackListener;
 use ManiaControl\Callbacks\Callbacks;
 use ManiaControl\Callbacks\Structures\TrackMania\OnScoresStructure;
 use ManiaControl\Callbacks\Structures\TrackMania\OnWayPointEventStructure;
+use ManiaControl\Callbacks\Structures\XmlRpc\CallbackListStructure;
 use ManiaControl\Callbacks\TimerListener;
 use ManiaControl\Commands\CommandListener;
 use ManiaControl\Communication\CommunicationAnswer;
@@ -27,6 +28,7 @@ use \ManiaControl\Logger;
 use ManiaControl\Settings\Setting;
 use ManiaControl\Settings\SettingManager;
 use ManiaControl\Utils\Formatter;
+use Maniaplanet\DedicatedServer\InvalidArgumentException;
 
 /**
  * Match Plugin
@@ -38,7 +40,7 @@ class MatchPlugin implements ManialinkPageAnswerListener, CallbackListener, Comm
 {
 
     const PLUGIN_ID = 119;
-    const PLUGIN_VERSION = 0.3;
+    const PLUGIN_VERSION = 0.4;
     const PLUGIN_NAME = 'MatchPlugin';
     const PLUGIN_AUTHOR = 'jonthekiller';
 
@@ -72,23 +74,28 @@ class MatchPlugin implements ManialinkPageAnswerListener, CallbackListener, Comm
     const TABLE_ROUNDS = 'drakonia_rounds';
     const TABLE_MATCHS = 'drakonia_matchs';
     const SETTING_MATCH_FORCESHOWOPPONENTS = 'Force Show Opponents';
+    const SETTING_MATCH_PAUSE_DURATION = 'Pause Duration in seconds';
+    const SETTING_MATCH_PAUSE_MAXNUMBER = 'Pause Max per Player';
+    const SETTING_MATCH_PAUSE_POSX = 'Pause Widget-Position: X';
+    const SETTING_MATCH_PAUSE_POSY = 'Pause Widget-Position: Y';
+    const MLID_MATCH_PAUSE_WIDGET = 'Pause Widget';
 
     const DEFAULT_TRACKMANIALIVE_PLUGIN = 'Drakonia\TrackmaniaLivePlugin';
 
     /*
      * Private properties
      */
+    public $matchStarted = false;
+    public $livePlugin = false;
     /** @var ManiaControl $maniaControl */
     private $maniaControl = null;
     private $scriptsDir = null;
-    public $matchStarted = false;
     private $times = array();
     private $nbmaps = 0;
     private $nbrounds = 0;
     private $playerstate = array();
     private $nbplayers = 0;
     private $alreadydone = false;
-    public $livePlugin = false;
     private $alreadyDoneTA = false;
 
     // Settings to keep in memory
@@ -121,6 +128,13 @@ class MatchPlugin implements ManialinkPageAnswerListener, CallbackListener, Comm
     private $scriptSettings = array();
 
     private $currentscore = array();
+    private $playerpause = array();
+    private $pausetimer = 0;
+    private $pauseasked = false;
+    private $pauseon = false;
+    private $activeplayers = array();
+    private $pauseaskedbyplayer = "";
+    private $numberpause = 0;
 
     /**
      * @see \ManiaControl\Plugins\Plugin::prepare()
@@ -219,6 +233,13 @@ class MatchPlugin implements ManialinkPageAnswerListener, CallbackListener, Comm
         $this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_MATCH_READY_NBPLAYERS, 2);
         $this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_MATCH_MAPLIST, "Drakonia_Cup.txt");
         $this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_MATCH_FORCESHOWOPPONENTS, true);
+        $this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_MATCH_PAUSE_DURATION, 120);
+        $this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_MATCH_PAUSE_MAXNUMBER, 1);
+
+        $this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_MATCH_PAUSE_POSX, 0);
+        $this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_MATCH_PAUSE_POSY, 0);
+
+        $this->maniaControl->getModeScriptEventManager()->unblockCallback("Trackmania.Event.WayPoint");
 
         $this->maniaControl->getManialinkManager()->registerManialinkPageAnswerListener(
             self::ACTION_READY,
@@ -283,6 +304,30 @@ class MatchPlugin implements ManialinkPageAnswerListener, CallbackListener, Comm
             'onCommandSetPoints',
             true,
             'Sets points to a player.'
+        );
+
+        $this->maniaControl->getCommandManager()->registerCommandListener(
+            'matchpause',
+            $this,
+            'onCommandSetPause',
+            true,
+            'Set pause during a match. [time] in seconds can be added to force another value'
+        );
+
+        $this->maniaControl->getCommandManager()->registerCommandListener(
+            'matchendpause',
+            $this,
+            'onCommandUnsetPause',
+            true,
+            'End the pause during a match.'
+        );
+
+        $this->maniaControl->getCommandManager()->registerCommandListener(
+            'pause',
+            $this,
+            'onCommandSetPausePlayer',
+            false,
+            'Set pause during a match.'
         );
 
         $this->maniaControl->getCallbackManager()->registerCallbackListener(
@@ -435,111 +480,9 @@ class MatchPlugin implements ManialinkPageAnswerListener, CallbackListener, Comm
         }
     }
 
-    /**
-     * @see \ManiaControl\Plugins\Plugin::unload()
-     */
-    public function unload()
-    {
-        $this->closeWidget();
-    }
-
-    /**
-     * Handle ManiaControl After Init
-     */
-    public function handle5Seconds()
-    {
-
-        //Logger::log($this->matchStarted ? 'true' : 'false');
-        if ($this->matchStarted === false) {
-            if ($this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_MATCH_READY_MODE)) {
-                //Logger::log("Ready Mode enabled");
-                $nbplayers = $this->maniaControl->getPlayerManager()->getPlayerCount();
-                //Logger::log($nbplayers);
-                if ($nbplayers >= $this->maniaControl->getSettingManager()->getSettingValue(
-                        $this,
-                        self::SETTING_MATCH_READY_NBPLAYERS
-                    )
-                ) {
-                    $ready = 1;
-                    foreach ($this->playerstate as $playertate) {
-                        if ($playertate == 0) {
-                            //Logger::log('At least one player not ready');
-                            $ready = 0;
-                        }
-                    }
-                    if ($ready == 1) {
-                        $players = $this->maniaControl->getPlayerManager()->getPlayers();
-
-                        foreach ($players as $player) {
-                            $this->playerstate[$player->login] = 0;
-                        }
-                        //Logger::log('Start Match');
-                        $this->MatchStart();
-
-                    }
-                }
-            }
-        }
-    }
-
-
-    public function getScriptSettings()
-    {
-        return $this->maniaControl->getClient()->getModeScriptSettings();
-    }
-
-    public function getMatchOptions()
-    {
-        $options = array(
-            "Nb Winners" => (!isset($this->scriptSettings['S_NbOfWinners']) || is_null($this->scriptSettings['S_NbOfWinners'])) ? '0' : $this->scriptSettings['S_NbOfWinners'],
-            "Points limit" => (!isset($this->scriptSettings['S_PointsLimit']) || is_null($this->scriptSettings['S_PointsLimit'])) ? '0' : $this->scriptSettings['S_PointsLimit'],
-            "Points Repartition" => $this->maniaControl->getSettingManager()->getSettingValue(
-                $this,
-                self::SETTING_MATCH_MATCH_POINTSREPARTITION
-            ),
-            "Allow Respawn" => (!isset($this->scriptSettings['S_AllowRespawn']) || is_null($this->scriptSettings['S_AllowRespawn'])) ? '0' : $this->scriptSettings['S_AllowRespawn'],
-            "Gamemode" => $this->maniaControl->getClient()->getModeScriptInfo()->name,
-            "Rounds per map" => (!isset($this->scriptSettings['S_RoundsPerMap']) || is_null($this->scriptSettings['S_RoundsPerMap'])) ? '0' : $this->scriptSettings['S_RoundsPerMap'],
-
-        );
-
-
-        return $options;
-    }
-
-    public function getMatchSettings()
-    {
-        return $this->matchSettings;
-    }
-
-    public function getPointsRepartition()
-    {
-        return $this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_MATCH_MATCH_POINTSREPARTITION);
-    }
-
-    public function getPlayers()
-    {
-        return $this->playerstate;
-    }
-
     public function getMatchStatus()
     {
         return $this->matchStarted;
-    }
-
-    public function getRoundNumber()
-    {
-        return $this->nbrounds;
-    }
-
-    public function getPlayersWinner()
-    {
-        return $this->playerswinner;
-    }
-
-    public function getPlayersFinalist()
-    {
-        return $this->playersfinalist;
     }
 
     public function getCurrentScore()
@@ -547,629 +490,9 @@ class MatchPlugin implements ManialinkPageAnswerListener, CallbackListener, Comm
         return $this->currentscore;
     }
 
-    public function getMatchPointsLimit()
+    public function getPlayers()
     {
-        return $this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_MATCH_MATCH_POINTS);
-    }
-
-    public function getNbWinners()
-    {
-        return $this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_MATCH_MATCH_NBWINNERS);
-    }
-
-    public function getMatchMode()
-    {
-        return $this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_MATCH_MATCH_MODE);
-    }
-
-    public function onCommandMatchEndRound(array $chatCallback)
-    {
-        $this->maniaControl->getModeScriptEventManager()->forceTrackmaniaRoundEnd();
-
-    }
-
-    public function onCommandSetPoints(array $chatCallback)
-    {
-        $text = $chatCallback[1][2];
-        $text = explode(" ", $text);
-        Logger::log($text[1]." ".$text[2]);
-        $player = $this->maniaControl->getPlayerManager()->getPlayer($text[1]);
-        if ($player) {
-            $this->maniaControl->getModeScriptEventManager()->setTrackmaniaPlayerPoints($player, "", "", $text[2]);
-            $this->maniaControl->getChat()->sendChat(
-                '$<$0f0$o Player $z'.$player->nickname.' $z$o$0f0has now '.$text[2].' points!$>'
-            );
-            $this->livePlugin = $this->maniaControl->getPluginManager()->getPlugin(self::DEFAULT_TRACKMANIALIVE_PLUGIN);
-            if ($this->livePlugin) {
-                $this->livePlugin->SetPoints($player, $text[2]);
-            }
-        } else {
-            $this->maniaControl->getChat()->sendError("Login ".$text[1]." doesn't exist");
-        }
-
-
-    }
-
-
-    /**
-     * @param OnScoresStructure $structure
-     */
-    public function handleEndRoundCallback(OnScoresStructure $structure)
-    {
-        //$this->maniaControl->getModeScriptEventManager()->getAllApiVersions()->setCallable(function (AllApiVersionsStructure $structure) {var_dump($structure->getVersions());} );
-//        Logger::log($structure->getSection());
-        $realSection = false;
-        if ($this->matchStarted === true) {
-            if ($structure->getSection() == "PreEndRound" && ($this->maniaControl->getSettingManager()->getSettingValue(
-                        $this,
-                        self::SETTING_MATCH_MATCH_MODE
-                    ) == "Rounds" OR $this->maniaControl->getSettingManager()->getSettingValue(
-                        $this,
-                        self::SETTING_MATCH_MATCH_MODE
-                    ) == "Cup")
-            ) {
-                $realSection = true;
-            } elseif ($structure->getSection() == "EndRound" && ($this->maniaControl->getSettingManager(
-                    )->getSettingValue($this, self::SETTING_MATCH_MATCH_MODE) == "TimeAttack")
-            ) {
-                $realSection = true;
-            } else {
-                $realSection = false;
-            }
-        }
-
-        if ($realSection) {
-
-
-            if ($this->alreadydone === false AND $this->nbmaps != 0 AND $this->nbrounds != $this->settings_nbroundsbymap) {
-                $database = "";
-                $this->currentscore = array();
-                $this->nbwinners = 0;
-                $results = $structure->getPlayerScores();
-                $realRound = false;
-
-                $pointsrepartition = $this->getPointsRepartition();
-                $pointsrepartition = explode(',', $pointsrepartition);
-
-                foreach ($results as $result) {
-                    $login = $result->getPlayer()->login;
-                    $rank = $result->getRank();
-                    $player = $result->getPlayer();
-//                    Logger::log($player->login . " PureSpec " . $player->isPureSpectator . "  Spec " . $player->isSpectator . "  Temp " . $player->isTemporarySpectator . "   Leave " . $player->isFakePlayer() . "  BestRaceTime " . $result->getBestRaceTime() . "  MatchPoints " . $result->getMatchPoints() . "  Roundpoints " . $result->getRoundPoints());
-
-                    if ($this->maniaControl->getSettingManager()->getSettingValue($this,self::SETTING_MATCH_MATCH_MODE) == "Cup" OR
-                        $this->maniaControl->getSettingManager()->getSettingValue($this,self::SETTING_MATCH_MATCH_MODE) == "Rounds") {
-                        if (($player->isSpectator && $result->getMatchPoints() == 0) || ($player->isFakePlayer(
-                                ) && $result->getMatchPoints() == 0)) {
-                        } else {
-
-                            if ($this->maniaControl->getSettingManager()->getSettingValue(
-                                    $this,
-                                    self::SETTING_MATCH_MATCH_MODE
-                                ) == "Cup"
-                            ) {
-                                $roundpoints = $result->getRoundPoints();
-                                $points = $result->getMatchPoints();
-
-//                            Logger::log($this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_MATCH_MATCH_POINTS));
-//                            Logger::log($roundpoints);
-//                            Logger::log($points);
-                                if (($points > $this->maniaControl->getSettingManager()->getSettingValue(
-                                            $this,
-                                            self::SETTING_MATCH_MATCH_POINTS
-                                        )) AND ($roundpoints == 0)
-                                ) {
-                                    //Logger::log("Winner");
-                                    $points = ($points + ($this->maniaControl->getSettingManager()->getSettingValue(
-                                                    $this,
-                                                    self::SETTING_MATCH_MATCH_NBWINNERS
-                                                ) - $this->nbwinners)) - $roundpoints;
-                                    $this->nbwinners++;
-                                } elseif (($points == $this->maniaControl->getSettingManager()->getSettingValue(
-                                            $this,
-                                            self::SETTING_MATCH_MATCH_POINTS
-                                        )) AND ($roundpoints == $pointsrepartition[0])
-                                ) {
-//                                Logger::log("Winner");
-                                    $points = ($points + ($this->maniaControl->getSettingManager()->getSettingValue(
-                                                    $this,
-                                                    self::SETTING_MATCH_MATCH_NBWINNERS
-                                                ) - $this->nbwinners)) - $roundpoints;
-                                    $this->nbwinners++;
-
-
-                                    $this->playerswinner = array_merge($this->playerswinner, array("$login"));
-                                    $this->playerswinner = array_unique($this->playerswinner);
-                                    $this->playersfinalist = array_diff($this->playersfinalist, ["$login"]);
-
-
-                                } elseif (($points + $roundpoints) >= $this->maniaControl->getSettingManager(
-                                    )->getSettingValue(
-                                        $this,
-                                        self::SETTING_MATCH_MATCH_POINTS
-                                    ) AND ($points != $this->maniaControl->getSettingManager()->getSettingValue(
-                                            $this,
-                                            self::SETTING_MATCH_MATCH_POINTS
-                                        ))
-                                ) {
-//                                Logger::log("Finalist");
-                                    $points = $this->maniaControl->getSettingManager()->getSettingValue(
-                                            $this,
-                                            self::SETTING_MATCH_MATCH_POINTS
-                                        ) - $roundpoints;
-                                    $this->playersfinalist = array_merge($this->playersfinalist, array("$login"));
-                                    $this->playersfinalist = array_unique($this->playersfinalist);
-                                }
-
-                                Logger::log($rank.", ".$login.", ".($points + $roundpoints).", ".$roundpoints);
-                                $database .= $rank.",".$login.",".($points + $roundpoints)."".PHP_EOL;
-
-                                if (!$realRound && $roundpoints > 0) {
-                                    $realRound = true;
-                                }
-
-
-                                $this->currentscore = array_merge(
-                                    $this->currentscore,
-                                    array(
-                                        array(
-                                            $rank,
-                                            $result->getPlayer()->login,
-                                            $result->getPlayer()->nickname,
-                                            ($points + $roundpoints),
-                                        ),
-                                    )
-                                );
-
-                                $this->type = "Cup";
-
-                            } elseif ($this->maniaControl->getSettingManager()->getSettingValue(
-                                    $this,
-                                    self::SETTING_MATCH_MATCH_MODE
-                                ) == "Rounds") {
-                                $roundpoints = $result->getRoundPoints();
-                                $points = $result->getMatchPoints();
-
-
-                                Logger::log($rank.", ".$login.", ".($points + $roundpoints).", ".$roundpoints);
-                                $database .= $rank.",".$login.",".($points + $roundpoints)."".PHP_EOL;
-
-                                $this->currentscore = array_merge(
-                                    $this->currentscore,
-                                    array(
-                                        array(
-                                            $rank,
-                                            $result->getPlayer()->login,
-                                            $result->getPlayer()->nickname,
-                                            ($points + $roundpoints),
-                                        ),
-                                    )
-                                );
-
-                                $this->type = "Rounds";
-                            }
-
-                        }
-                    }elseif ($this->maniaControl->getSettingManager()->getSettingValue(
-                                $this,
-                                self::SETTING_MATCH_MATCH_MODE
-                            ) == "TimeAttack"
-                        ) {
-
-                        if (($player->isSpectator && $result->getBestRaceTime() == 0) || ($player->isSpectator && $result->getBestRaceTime() == -1) ||
-                            ($player->isFakePlayer() && $result->getBestRaceTime() == 0) || ($player->isFakePlayer() && $result->getBestRaceTime() == -1)) {
-                        } else {
-                            $time = $result->getBestRaceTime();
-                            Logger::log($rank.", ".$login.", ".$time);
-                            $database .= $rank.",".$login.",".$time."".PHP_EOL;
-
-                            $this->type = "TA";
-                        }
-
-
-                    }
-
-                }
-                //Logger::log('Count number of players finish: '. count($this->times));
-
-                if (($realRound && $this->maniaControl->getSettingManager()->getSettingValue(
-                            $this,
-                            self::SETTING_MATCH_MATCH_MODE
-                        ) == "Cup") || $this->maniaControl->getSettingManager()->getSettingValue(
-                        $this,
-                        self::SETTING_MATCH_MATCH_MODE
-                    ) == "Rounds"
-                ) {
-                    $this->nbrounds++;
-                }
-
-
-                $this->scores = $database;
-
-                if ($this->type == "TA" AND !$this->alreadyDoneTA) {
-                    $mapname = $this->maniaControl->getMapManager()->getCurrentMap()->name;
-
-                    $mapname = Formatter::stripCodes($mapname);
-                    $mysqli = $this->maniaControl->getDatabase()->getMysqli();
-                    $server = $this->maniaControl->getServer()->login;
-                    $query = "INSERT INTO `".self::TABLE_MATCHS."`
-                            (`type`,`score`,`srvlogin`,`mapname`)
-                            VALUES
-                            ('$this->type','$this->scores','$server','$mapname')";
-                    Logger::log($query);
-                    $mysqli->query($query);
-                    if($this->livePlugin) {
-                        $this->livePlugin->updateTATimes($this->scores, $this->maniaControl->getMapManager()->getCurrentMap(), $this->nbmaps);
-                    }
-
-                    if ($mysqli->error) {
-                        trigger_error($mysqli->error);
-
-                        return false;
-                    }
-
-                    $this->alreadyDoneTA = true;
-                }
-                // Store round result in database for logs management
-                $mysqli = $this->maniaControl->getDatabase()->getMysqli();
-                $server = $this->maniaControl->getServer()->login;
-
-
-                $query = "INSERT INTO `".self::TABLE_ROUNDS."`
-				(`server`, `rounds`)
-				VALUES
-				('$server','$database')";
-                //Logger::log($query);
-                $mysqli->query($query);
-                if ($mysqli->error) {
-                    trigger_error($mysqli->error);
-
-                    return false;
-                }
-                $this->alreadydone = true;
-
-
-                //Logger::log("Rounds finished: " . $this->nbrounds);
-            }
-
-            // In case of points reset after 1st map in Recovery mode
-            if ($this->matchStarted === true && $this->maniaControl->getSettingManager()->getSettingValue(
-                    $this,
-                    self::SETTING_MATCH_MATCH_MODE
-                ) == "Cup" && $this->matchrecover === true
-            ) {
-                if ($this->nbrounds == $this->settings_nbroundsbymap) {
-                    $results = $structure->getPlayerScores();
-                    $i = 1;
-                    foreach ($results as $result) {
-                        if ($result->getPlayer()->isSpectator) {
-
-                        } else {
-                            $this->{"player".$i."_playerlogin"} = $result->getPlayer()->login;
-                            $this->{"player".$i."_points"} = $result->getMatchPoints() + $result->getRoundPoints();
-                            $i++;
-                        }
-                    }
-
-                    $this->playercount = ($i - 1);
-                    $this->restorepoints = true;
-                    $this->fakeround = true;
-                    $this->maniaControl->getMapManager()->getMapActions()->skipMap();
-
-                }
-            }
-
-        }
-
-        return true;
-    }
-
-
-    public function handleBeginRoundCallback()
-    {
-        $this->alreadyDoneTA = false;
-        $this->alreadydone = false;
-        $this->times = array();
-        if ($this->matchStarted === true && $this->fakeround === false) {
-            if ($this->maniaControl->getSettingManager()->getSettingValue(
-                    $this,
-                    self::SETTING_MATCH_MATCH_MODE
-                ) == "Rounds" OR $this->maniaControl->getSettingManager()->getSettingValue(
-                    $this,
-                    self::SETTING_MATCH_MATCH_MODE
-                ) == "Cup"
-            ) {
-                $this->maniaControl->getChat()->sendChat(
-                    '$<$ffd$o Round>'.($this->nbrounds + 1).' / '.$this->settings_nbroundsbymap.'  $w$i$F00GO GO GO  $F66!$F88!$F99!$FBB!$FDD!$FFF!$>'
-                );
-                Logger::log("Round: ".($this->nbrounds + 1).' / '.$this->settings_nbroundsbymap);
-            } elseif ($this->maniaControl->getSettingManager()->getSettingValue(
-                    $this,
-                    self::SETTING_MATCH_MATCH_MODE
-                ) == "TimeAttack"
-            ) {
-                if ($this->nbmaps > 0) {
-                    $this->maniaControl->getChat()->sendChat(
-                        '$<$ffd$o Map>'.($this->nbmaps).'   $w$i$F00GO GO GO  $F66!$F88!$F99!$FBB!$FDD!$FFF!$>'
-                    );
-                    Logger::log("Map: ".$this->nbmaps);
-                }
-            }
-        }
-
-
-        // Recovering mode (Nadeo's Cup script can reset points after 1st map)
-        if ($this->maniaControl->getSettingManager()->getSettingValue(
-                $this,
-                self::SETTING_MATCH_MATCH_MODE
-            ) == "Cup" && $this->matchrecover === true && $this->restorepoints === true && $this->fakeround === false
-        ) {
-
-            for ($i = 1; $i <= $this->playercount; $i++) {
-                if ($this->{"player".$i."_playerlogin"} != "") {
-                    $player = $this->maniaControl->getPlayerManager()->getPlayer($this->{"player".$i."_playerlogin"});
-                    $this->maniaControl->getModeScriptEventManager()->setTrackmaniaPlayerPoints(
-                        $player,
-                        "",
-                        "",
-                        $this->{"player".$i."_points"}
-                    );
-                    $this->maniaControl->getChat()->sendChat(
-                        '$<$0f0$o Player $z'.$player->nickname.' $z$o$0f0has now '.$this->{"player".$i."_points"}.' points!$>'
-                    );
-                    Logger::log('Player '.$player->login.' has now '.$this->{"player".$i."_points"}.' points!');
-                }
-            }
-            $this->restorepoints = false;
-            $this->matchrecover = false;
-        }
-    }
-
-
-    public function handleEndMapCallback()
-    {
-
-        if ($this->matchStarted) {
-            if ($this->maniaControl->getSettingManager()->getSettingValue(
-                    $this,
-                    self::SETTING_MATCH_MATCH_MODE
-                ) == "Rounds"
-            ) {
-
-                if ($this->settings_nbmapsbymatch == $this->nbmaps) {
-
-                    if ($this->nbrounds == $this->settings_nbroundsbymap) {
-
-                        $this->MatchEnd();
-                    }
-                }
-            } elseif ($this->maniaControl->getSettingManager()->getSettingValue(
-                    $this,
-                    self::SETTING_MATCH_MATCH_MODE
-                ) == "TimeAttack"
-            ) {
-                if ($this->nbmaps == $this->settings_nbmapsbymatch) {
-                    $this->MatchEnd();
-                }
-
-            } elseif ($this->maniaControl->getSettingManager()->getSettingValue(
-                    $this,
-                    self::SETTING_MATCH_MATCH_MODE
-                ) == "Cup"
-            ) {
-
-                if ($this->maniaControl->getSettingManager()->getSettingValue(
-                        $this,
-                        self::SETTING_MATCH_MATCH_NBWINNERS
-                    ) == $this->nbwinners
-                ) {
-                    $this->MatchEnd();
-                } elseif (count($this->playerswinner) == $this->maniaControl->getSettingManager()->getSettingValue(
-                        $this,
-                        self::SETTING_MATCH_MATCH_NBWINNERS
-                    ) AND count($this->playerswinner) > 0) {
-                    $this->MatchEnd();
-                }
-
-            }
-            $this->fakeround = false;
-        }
-    }
-
-    public function MatchEnd()
-    {
-        $scriptName = $this->maniaControl->getSettingManager()->getSettingValue(
-            $this,
-            self::SETTING_MATCH_NOMATCH_MODE
-        );
-        $scriptName .= '.Script.txt';
-
-        $loadedSettings = array(
-            'S_TimeLimit' => 600,
-            self::SETTING_MATCH_MATCH_ALLOWREPASWN => true,
-            self::SETTING_MATCH_MATCH_NBWARMUP => 0,
-        );
-
-        try {
-            $this->livePlugin = $this->maniaControl->getPluginManager()->getPlugin(self::DEFAULT_TRACKMANIALIVE_PLUGIN);
-            if ($this->livePlugin) {
-                $this->livePlugin->MatchEnd();
-            }
-
-
-            if ($this->type == "Cup") {
-                $mysqli = $this->maniaControl->getDatabase()->getMysqli();
-                $server = $this->maniaControl->getServer()->login;
-                $query = "INSERT INTO `".self::TABLE_MATCHS."`
-				(`type`,`score`,`srvlogin`)
-				VALUES
-				('$this->type','$this->scores','$server')";
-                //Logger::log($query);
-                $mysqli->query($query);
-                if ($mysqli->error) {
-                    trigger_error($mysqli->error);
-
-                    return false;
-                }
-            }elseif($this->type == "TA")
-            {
-                if ($this->livePlugin) {
-                    $this->livePlugin->endTA();
-                }
-            }
-
-            $this->loadScript($scriptName, $loadedSettings);
-            $this->maniaControl->getChat()->sendSuccess("Match finished");
-            Logger::log("Match finished");
-            $this->matchStarted = false;
-
-            $this->matchSettings = $loadedSettings;
-
-            $players = $this->maniaControl->getPlayerManager()->getPlayers();
-
-            foreach ($players as $player) {
-                $this->handlePlayerConnect($player);
-            }
-
-            $this->currentscore = "";
-
-        } catch (Exception $e) {
-            $this->maniaControl->getChat()->sendError("Can not finish match: ".$e->getMessage());
-        }
-    }
-
-    public function MatchStop()
-    {
-        $scriptName = $this->maniaControl->getSettingManager()->getSettingValue(
-            $this,
-            self::SETTING_MATCH_NOMATCH_MODE
-        );
-        $scriptName .= '.Script.txt';
-
-        $loadedSettings = array(
-            'S_TimeLimit' => 600,
-            self::SETTING_MATCH_MATCH_ALLOWREPASWN => true,
-            self::SETTING_MATCH_MATCH_NBWARMUP => 0,
-        );
-
-        try {
-            $this->livePlugin = $this->maniaControl->getPluginManager()->getPlugin(self::DEFAULT_TRACKMANIALIVE_PLUGIN);
-            if ($this->livePlugin) {
-                $this->livePlugin->MatchStop();
-            }
-            $this->loadScript($scriptName, $loadedSettings);
-            $this->maniaControl->getChat()->sendSuccess("Match stop");
-            Logger::log("Match stop");
-            $this->matchStarted = false;
-            $this->matchSettings = $loadedSettings;
-
-            $players = $this->maniaControl->getPlayerManager()->getPlayers();
-
-            foreach ($players as $player) {
-                $this->handlePlayerConnect($player);
-            }
-
-        } catch (Exception $e) {
-            $this->maniaControl->getChat()->sendError("Can not stop match: ".$e->getMessage());
-        }
-    }
-
-    /**
-     * Loads a script if possible, otherwise throws an exception.
-     * $scriptName will be set to a proper capitalized etc. name.
-     *
-     * @param $scriptName
-     * @param array $loadedSettings
-     * @throws Exception
-     */
-    private function loadScript(&$scriptName, array $loadedSettings = null)
-    {
-        if ($this->scriptsDir !== null) {
-            $scriptPath = $this->scriptsDir.$scriptName;
-
-            if (!file_exists($scriptPath)) {
-                throw new Exception('Script not found ('.$scriptPath.').');
-            }
-
-            // Get 'real' script name (mainly nice for Windows)
-            $scriptName = pathinfo(realpath($scriptPath))['basename'];
-            //var_dump($loadedSettings);
-            $script = file_get_contents($scriptPath);
-            $this->maniaControl->getClient()->setModeScriptText($script);
-            $this->maniaControl->getClient()->setScriptName($scriptName);
-            if($loadedSettings != null)
-                $this->maniaControl->getClient()->setModeScriptSettings($loadedSettings);
-
-        } else {
-            throw new Exception('Scripts directory not found ('.$this->scriptsDir.').');
-        }
-    }
-
-    public function handleBeginMapCallback()
-    {
-
-        if ($this->matchStarted === true) {
-            $this->nbmaps++;
-            if (!$this->matchrecover2) {
-                $this->nbrounds = 0;
-            }else{
-                $this->matchrecover2 = false;
-            }
-            if ($this->nbmaps > 0) {
-                Logger::log("Map: ".$this->nbmaps);
-
-                $maps = $this->maniaControl->getMapManager()->getMaps();
-                $i = 1;
-                $this->maniaControl->getChat()->sendChat('$<$fff$o$i>>>Current Map$>');
-                $currentmap = $this->maniaControl->getMapManager()->getCurrentMap();
-                $this->maniaControl->getChat()->sendChat(
-                    '$<$fff$o$i'.Formatter::stripCodes($currentmap->name).'$>'
-                );
-                Logger::log("Current Map: ".Formatter::stripCodes($currentmap->name));
-                $continue = false;
-                $current = false;
-                foreach ($maps as $map) {
-
-                    if ($currentmap->uid == $map->uid) {
-                        $continue = true;
-                        $current = true;
-                    }
-
-                    if ($continue && $this->nbmaps < $this->settings_nbmapsbymatch) {
-                        if ($current) {
-                            $this->maniaControl->getChat()->sendChat('$<$fff$o$i>>>Next Maps$>');
-                            $current = false;
-                        } elseif (($this->nbmaps + $i) <= ($this->settings_nbmapsbymatch)) {
-                            if ($i > 0) {
-                                Logger::log("Map ".$i.": ".Formatter::stripCodes($map->name));
-                                $this->maniaControl->getChat()->sendChat(
-                                    '$<$fff$o$i'.$i.': '.Formatter::stripCodes($map->name).'$>'
-                                );
-                            }
-                            $nbmaps = $this->maniaControl->getMapManager()->getMapsCount();
-                            $i++;
-                            if ($this->nbmaps == ($nbmaps - ($i - 1) + 1) OR $this->settings_nbmapsbymatch == (($i - 1) + $this->nbmaps - 1)) {
-                                $continue = false;
-                            }
-
-
-                        }
-                    }
-                }
-            }
-
-        }
-    }
-
-    public function onCommandMatchStart(array $chatCallback, Player $player)
-    {
-        $authLevel = $this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_MATCH_AUTHLEVEL);
-        if (!$this->maniaControl->getAuthenticationManager()->checkRight($player, $authLevel)) {
-            $this->maniaControl->getAuthenticationManager()->sendNotAllowed($player);
-
-            return;
-        }
-        $this->MatchStart();
+        return $this->playerstate;
     }
 
     public function MatchStart()
@@ -1296,8 +619,6 @@ class MatchPlugin implements ManialinkPageAnswerListener, CallbackListener, Comm
                 try {
 
 
-
-
 //                    Logger::log("Begin try");
                     $this->playerswinner = array();
 
@@ -1343,7 +664,6 @@ class MatchPlugin implements ManialinkPageAnswerListener, CallbackListener, Comm
 //                    Logger::log("Restructure maplist");
                         $this->maniaControl->getMapManager()->restructureMapList();
                     }
-
 
 
 //                    Logger::log("3");
@@ -1398,6 +718,14 @@ class MatchPlugin implements ManialinkPageAnswerListener, CallbackListener, Comm
 //                    Logger::log("4");
 
 
+                    //Reset Pause
+                    foreach ($players as $player) {
+                        if (!$player->isSpectator) {
+                            $this->playerpause[$player->login] = 0;
+                        }
+                    }
+                    $this->pauseasked = false;
+                    $this->pauseaskedbyplayer = "";
 
                     // Stock Script Settings inside variable
                     $this->scriptSettings = $this->getScriptSettings();
@@ -1413,24 +741,30 @@ class MatchPlugin implements ManialinkPageAnswerListener, CallbackListener, Comm
                     Logger::log($matchdetail);
                     $this->maniaControl->getChat()->sendInformation($matchdetail);
 
-                    $respawn = (!isset($this->scriptSettings['S_AllowRespawn']) || is_null($this->scriptSettings['S_AllowRespawn'])) ? '0' : $this->scriptSettings['S_AllowRespawn'];
+                    $respawn = (!isset($this->scriptSettings['S_AllowRespawn']) || is_null(
+                            $this->scriptSettings['S_AllowRespawn']
+                        )) ? '0' : $this->scriptSettings['S_AllowRespawn'];
 
                     if ($script['CurrentValue'] == "Cup.Script.txt") {
-                        $matchdetail = "S_PointsLimit => ".$this->scriptSettings['S_PointsLimit'].", S_NbOfWinners => " .$this->scriptSettings['S_NbOfWinners'].", S_AllowRespawn => ".$respawn.
-                        ",S_RoundsPerMap => ".$this->scriptSettings['S_RoundsPerMap'].", S_MapsPerMatch => " .(int)$this->maniaControl->getSettingManager()->getSettingValue($this,self::SETTING_MATCH_MATCH_NBMAPS).
-                        ",S_WarmUpNb => ".$this->scriptSettings['S_WarmUpNb'].", S_FinishTimeout => " .$this->scriptSettings['S_FinishTimeout'];
+                        $matchdetail = "S_PointsLimit => ".$this->scriptSettings['S_PointsLimit'].", S_NbOfWinners => ".$this->scriptSettings['S_NbOfWinners'].", S_AllowRespawn => ".$respawn.
+                            ",S_RoundsPerMap => ".$this->scriptSettings['S_RoundsPerMap'].", S_MapsPerMatch => ".(int)$this->maniaControl->getSettingManager(
+                            )->getSettingValue($this, self::SETTING_MATCH_MATCH_NBMAPS).
+                            ",S_WarmUpNb => ".$this->scriptSettings['S_WarmUpNb'].", S_FinishTimeout => ".$this->scriptSettings['S_FinishTimeout'];
                         $matchdetail = $matchdetail.", PointsRepartition: ".$this->maniaControl->getSettingManager(
                             )->getSettingValue($this, self::SETTING_MATCH_MATCH_POINTSREPARTITION);
-                    }elseif ($script['CurrentValue'] == "Rounds.Script.txt") {
-                        $matchdetail = "S_PointsLimit => ".$this->scriptSettings['S_PointsLimit'].", S_NbOfWinners => " .$this->scriptSettings['S_NbOfWinners'].", S_AllowRespawn => ".$respawn.
-                            ",S_RoundsPerMap => ".$this->scriptSettings['S_RoundsPerMap'].", S_MapsPerMatch => " .$this->scriptSettings['S_MapsPerMatch'].
-                            ",S_WarmUpNb => ".$this->scriptSettings['S_WarmUpNb'].", S_FinishTimeout => " .$this->scriptSettings['S_FinishTimeout'];
+                    } elseif ($script['CurrentValue'] == "Rounds.Script.txt") {
+                        $matchdetail = "S_PointsLimit => ".$this->scriptSettings['S_PointsLimit'].", S_NbOfWinners => ".$this->scriptSettings['S_NbOfWinners'].", S_AllowRespawn => ".$respawn.
+                            ",S_RoundsPerMap => ".$this->scriptSettings['S_RoundsPerMap'].", S_MapsPerMatch => ".$this->scriptSettings['S_MapsPerMatch'].
+                            ",S_WarmUpNb => ".$this->scriptSettings['S_WarmUpNb'].", S_FinishTimeout => ".$this->scriptSettings['S_FinishTimeout'];
                         $matchdetail = $matchdetail.", PointsRepartition: ".$this->maniaControl->getSettingManager(
                             )->getSettingValue($this, self::SETTING_MATCH_MATCH_POINTSREPARTITION);
-                    }elseif ($script['CurrentValue'] == "TimeAttack.Script.txt"){
-                        $matchdetail = "S_TimeLimit => ".$this->scriptSettings['S_TimeLimit'].", S_MapsPerMatch => " .$this->maniaControl->getSettingManager()->getSettingValue(
-                            $this,self::SETTING_MATCH_MATCH_NBMAPS).", S_AllowRespawn => ".$respawn
-                        .",S_WarmUpDuration => ".$this->scriptSettings['S_WarmUpDuration'];
+                    } elseif ($script['CurrentValue'] == "TimeAttack.Script.txt") {
+                        $matchdetail = "S_TimeLimit => ".$this->scriptSettings['S_TimeLimit'].", S_MapsPerMatch => ".$this->maniaControl->getSettingManager(
+                            )->getSettingValue(
+                                $this,
+                                self::SETTING_MATCH_MATCH_NBMAPS
+                            ).", S_AllowRespawn => ".$respawn
+                            .",S_WarmUpDuration => ".$this->scriptSettings['S_WarmUpDuration'];
                     }
 
                     Logger::log($matchdetail);
@@ -1453,6 +787,1073 @@ class MatchPlugin implements ManialinkPageAnswerListener, CallbackListener, Comm
         );
     }
 
+    /**
+     * Loads a script if possible, otherwise throws an exception.
+     * $scriptName will be set to a proper capitalized etc. name.
+     *
+     * @param $scriptName
+     * @param array $loadedSettings
+     * @throws Exception
+     */
+    private function loadScript(&$scriptName, array $loadedSettings = null)
+    {
+        if ($this->scriptsDir !== null) {
+            $scriptPath = $this->scriptsDir.$scriptName;
+
+            if (!file_exists($scriptPath)) {
+                throw new Exception('Script not found ('.$scriptPath.').');
+            }
+
+            // Get 'real' script name (mainly nice for Windows)
+            $scriptName = pathinfo(realpath($scriptPath))['basename'];
+            //var_dump($loadedSettings);
+            $script = file_get_contents($scriptPath);
+            $this->maniaControl->getClient()->setModeScriptText($script);
+            $this->maniaControl->getClient()->setScriptName($scriptName);
+            if ($loadedSettings != null) {
+                $this->maniaControl->getClient()->setModeScriptSettings($loadedSettings);
+            }
+
+        } else {
+            throw new Exception('Scripts directory not found ('.$this->scriptsDir.').');
+        }
+    }
+
+    public function handlePlayerConnect(Player $player)
+    {
+        if ($player->isSpectator) {
+            $this->playerstate[$player->login] = -1;
+        } else {
+            $this->playerstate[$player->login] = 0;
+            $this->nbplayers++;
+            $this->displayWidgets($player->login);
+        }
+
+//        if ($this->pauseon) {
+//            $this->displayPauseWidget($player->login);
+//        }
+
+        if ($this->matchStarted) {
+            if (!isset($this->playerpause[$player->login])) {
+                $this->playerpause[$player->login] = 0;
+            }
+        }
+    }
+
+    private function displayWidgets($login)
+    {
+        if ($this->maniaControl->getSettingManager()->getSettingValue(
+                $this,
+                self::SETTING_MATCH_READY_MODE
+            ) && (!$this->matchStarted)
+        ) {
+            $this->displayReadyWidget($login);
+        } else {
+            $this->playerstate[$login] = 0;
+            $this->closeReadyWidget($login);
+        }
+    }
+
+    /**
+     * Displays the Ready Widget
+     *
+     * @param bool $login
+     */
+    public function displayReadyWidget($login)
+    {
+        $posX = $this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_MATCH_READY_POSX);
+        $posY = $this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_MATCH_READY_POSY);
+        $width = $this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_MATCH_READY_WIDTH);
+        $height = $this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_MATCH_READY_HEIGHT);
+        $quadStyle = $this->maniaControl->getManialinkManager()->getStyleManager()->getDefaultQuadStyle();
+        $quadSubstyle = $this->maniaControl->getManialinkManager()->getStyleManager()->getDefaultQuadSubstyle();
+
+        $maniaLink = new ManiaLink(self::MLID_MATCH_READY_WIDGET);
+
+        // mainframe
+        $frame = new Frame();
+        $maniaLink->addChild($frame);
+        $frame->setSize($width, $height);
+        $frame->setPosition($posX, $posY);
+
+        // Background Quad
+        $backgroundQuad = new Quad();
+        $frame->addChild($backgroundQuad);
+        $backgroundQuad->setSize($width, $height);
+        $backgroundQuad->setStyles($quadStyle, $quadSubstyle);
+        $backgroundQuad->setAction(self::ACTION_READY);
+
+        $label = new Label_Text();
+        $frame->addChild($label);
+        $label->setPosition(0, 1.5, 0.2);
+        $label->setVerticalAlign($label::TOP);
+        $label->setTextSize(2);
+
+        if ($this->playerstate[$login] == 1) {
+            $label->setTextColor('0f0');
+        } else {
+            $label->setTextColor('f00');
+        }
+        $label->setText("Ready?");
+
+        // Send manialink
+        $this->maniaControl->getManialinkManager()->sendManialink($maniaLink, $login);
+    }
+
+    /**
+     * Close Ready Widget
+     *
+     */
+    public function closeReadyWidget($login = null)
+    {
+        $this->maniaControl->getManialinkManager()->hideManialink(self::MLID_MATCH_READY_WIDGET, $login);
+    }
+
+    public function displayPauseWidget($numberpause)
+    {
+        $posX = $this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_MATCH_PAUSE_POSX);
+        $posY = $this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_MATCH_PAUSE_POSY);
+
+        $maniaLink = new ManiaLink(self::MLID_MATCH_PAUSE_WIDGET);
+
+        // mainframe
+        $frame = new Frame();
+        $maniaLink->addChild($frame);
+        $frame->setSize(30, 20);
+        $frame->setPosition($posX, $posY);
+
+
+        $label = new Label_Text();
+        $frame->addChild($label);
+        $label->setPosition(0, 2, 0.2);
+        $label->setVerticalAlign($label::TOP);
+        $label->setTextSize(12);
+
+        if ($this->pausetimer < 10) {
+            $label->setTextColor('f00');
+        } else {
+            $label->setTextColor('fff');
+        }
+        $label->setText($this->pausetimer);
+
+        Logger::log("Pause: ".$this->pausetimer);
+        // Send manialink
+        $this->maniaControl->getManialinkManager()->sendManialink($maniaLink);
+
+        $this->maniaControl->getTimerManager()->registerOneTimeListening(
+            $this,
+            function () use (&$numberpause){
+                if ($numberpause == $this->numberpause) {
+                    if ($this->pausetimer > 0 && $this->pauseon) {
+                        $this->pausetimer--;
+                        $this->displayPauseWidget($numberpause);
+                    } else {
+                        $this->closePauseWidget();
+                    }
+                }
+            },
+            1000
+        );
+    }
+
+    /**
+     * Close Pause Widget
+     *
+     */
+    public function closePauseWidget($login = null)
+    {
+        $this->maniaControl->getManialinkManager()->hideManialink(self::MLID_MATCH_PAUSE_WIDGET, $login);
+    }
+
+    public function getScriptSettings()
+    {
+        return $this->maniaControl->getClient()->getModeScriptSettings();
+    }
+
+    public function MatchStop()
+    {
+        $scriptName = $this->maniaControl->getSettingManager()->getSettingValue(
+            $this,
+            self::SETTING_MATCH_NOMATCH_MODE
+        );
+        $scriptName .= '.Script.txt';
+
+        $loadedSettings = array(
+            'S_TimeLimit' => 600,
+            self::SETTING_MATCH_MATCH_ALLOWREPASWN => true,
+            self::SETTING_MATCH_MATCH_NBWARMUP => 0,
+        );
+
+        try {
+            $this->livePlugin = $this->maniaControl->getPluginManager()->getPlugin(self::DEFAULT_TRACKMANIALIVE_PLUGIN);
+            if ($this->livePlugin) {
+                $this->livePlugin->MatchStop();
+            }
+            $this->loadScript($scriptName, $loadedSettings);
+            $this->maniaControl->getChat()->sendSuccess("Match stop");
+            Logger::log("Match stop");
+            $this->matchStarted = false;
+            $this->matchSettings = $loadedSettings;
+
+            $players = $this->maniaControl->getPlayerManager()->getPlayers();
+
+            foreach ($players as $player) {
+                $this->handlePlayerConnect($player);
+            }
+
+        } catch (Exception $e) {
+            $this->maniaControl->getChat()->sendError("Can not stop match: ".$e->getMessage());
+        }
+    }
+
+    public function getMatchOptions()
+    {
+        $options = array(
+            "Nb Winners" => (!isset($this->scriptSettings['S_NbOfWinners']) || is_null(
+                    $this->scriptSettings['S_NbOfWinners']
+                )) ? '0' : $this->scriptSettings['S_NbOfWinners'],
+            "Points limit" => (!isset($this->scriptSettings['S_PointsLimit']) || is_null(
+                    $this->scriptSettings['S_PointsLimit']
+                )) ? '0' : $this->scriptSettings['S_PointsLimit'],
+            "Points Repartition" => $this->maniaControl->getSettingManager()->getSettingValue(
+                $this,
+                self::SETTING_MATCH_MATCH_POINTSREPARTITION
+            ),
+            "Allow Respawn" => (!isset($this->scriptSettings['S_AllowRespawn']) || is_null(
+                    $this->scriptSettings['S_AllowRespawn']
+                )) ? '0' : $this->scriptSettings['S_AllowRespawn'],
+            "Gamemode" => $this->maniaControl->getClient()->getModeScriptInfo()->name,
+            "Rounds per map" => (!isset($this->scriptSettings['S_RoundsPerMap']) || is_null(
+                    $this->scriptSettings['S_RoundsPerMap']
+                )) ? '0' : $this->scriptSettings['S_RoundsPerMap'],
+
+        );
+
+
+        return $options;
+    }
+
+    /**
+     * @see \ManiaControl\Plugins\Plugin::unload()
+     */
+    public function unload()
+    {
+        $this->closeReadyWidget();
+    }
+
+    /**
+     * Handle ManiaControl After Init
+     */
+    public function handle5Seconds()
+    {
+
+//        $this->maniaControl->getModeScriptEventManager()->getCallbacksList()->setCallable(function (CallbackListStructure $structure){
+//            var_dump($structure->getCallbacks());
+//        });
+//
+//
+//        $this->maniaControl->getModeScriptEventManager()->getListOfEnabledCallbacks()->setCallable(function (CallbackListStructure $structure){
+//            var_dump($structure->getCallbacks());
+//        });
+//
+//        $this->maniaControl->getModeScriptEventManager()->getListOfDisabledCallbacks()->setCallable(function (CallbackListStructure $structure){
+//            var_dump($structure->getCallbacks());
+//        });
+
+
+        //Logger::log($this->matchStarted ? 'true' : 'false');
+        if ($this->matchStarted === false) {
+            if ($this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_MATCH_READY_MODE)) {
+                //Logger::log("Ready Mode enabled");
+                $nbplayers = $this->maniaControl->getPlayerManager()->getPlayerCount();
+                //Logger::log($nbplayers);
+                if ($nbplayers >= $this->maniaControl->getSettingManager()->getSettingValue(
+                        $this,
+                        self::SETTING_MATCH_READY_NBPLAYERS
+                    )
+                ) {
+                    $ready = 1;
+                    foreach ($this->playerstate as $playertate) {
+                        if ($playertate == 0) {
+                            //Logger::log('At least one player not ready');
+                            $ready = 0;
+                        }
+                    }
+                    if ($ready == 1) {
+                        $players = $this->maniaControl->getPlayerManager()->getPlayers();
+
+                        foreach ($players as $player) {
+                            $this->playerstate[$player->login] = 0;
+                        }
+                        //Logger::log('Start Match');
+                        $this->MatchStart();
+
+                    }
+                }
+            }
+        }
+    }
+
+    public function getMatchSettings()
+    {
+        return $this->matchSettings;
+    }
+
+    public function getRoundNumber()
+    {
+        return $this->nbrounds;
+    }
+
+    public function getPlayersWinner()
+    {
+        return $this->playerswinner;
+    }
+
+    public function getPlayersFinalist()
+    {
+        return $this->playersfinalist;
+    }
+
+    public function getMatchPointsLimit()
+    {
+        return $this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_MATCH_MATCH_POINTS);
+    }
+
+    public function getNbWinners()
+    {
+        return $this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_MATCH_MATCH_NBWINNERS);
+    }
+
+    public function onCommandMatchEndRound(array $chatCallback)
+    {
+        $this->maniaControl->getModeScriptEventManager()->forceTrackmaniaRoundEnd();
+
+    }
+
+    public function onCommandSetPoints(array $chatCallback)
+    {
+        $text = $chatCallback[1][2];
+        $text = explode(" ", $text);
+        Logger::log($text[1]." ".$text[2]);
+        $player = $this->maniaControl->getPlayerManager()->getPlayer($text[1]);
+        if ($player) {
+            $this->maniaControl->getModeScriptEventManager()->setTrackmaniaPlayerPoints($player, "", "", $text[2]);
+            $this->maniaControl->getChat()->sendChat(
+                '$<$0f0$o Player $z'.$player->nickname.' $z$o$0f0has now '.$text[2].' points!$>'
+            );
+            $this->livePlugin = $this->maniaControl->getPluginManager()->getPlugin(self::DEFAULT_TRACKMANIALIVE_PLUGIN);
+            if ($this->livePlugin) {
+                $this->livePlugin->SetPoints($player, $text[2]);
+            }
+        } else {
+            $this->maniaControl->getChat()->sendError("Login ".$text[1]." doesn't exist");
+        }
+
+
+    }
+
+    public function onCommandSetPause(array $chatCallback)
+    {
+        if (($this->matchStarted) && ($this->getMatchMode() != "TimeAttack")) {
+            $text = $chatCallback[1][2];
+            $text = explode(" ", $text);
+            if(isset($text[1]) && $text[1] != "")
+            {
+                $this->maniaControl->getChat()->sendChat(
+                    '$<$0f0$o Admin force a break for '.$text[1].' seconds!$>'
+                );
+                $this->setPause(true, $text[1]);
+            }else {
+                $this->maniaControl->getChat()->sendChat(
+                    '$<$0f0$o Admin force a break for '.$this->maniaControl->getSettingManager()->getSettingValue(
+                        $this,
+                        self::SETTING_MATCH_PAUSE_DURATION
+                    ).' seconds!$>'
+                );
+                $this->setPause(true);
+            }
+        }
+    }
+
+    public function onCommandUnsetPause(array $chatCallback, Player $player)
+    {
+        if (($this->matchStarted) && ($this->getMatchMode() != "TimeAttack") && $this->pauseon) {
+            $this->maniaControl->getChat()->sendChat(
+                '$<$f00$o Admin stop the break!$>'
+            );
+            $this->unsetPause();
+        }else{
+            $this->maniaControl->getChat()->sendChat(
+                '$<$f00$o No pause in progress!$>', $player->login
+            );
+        }
+    }
+
+    public function getMatchMode()
+    {
+        return $this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_MATCH_MATCH_MODE);
+    }
+
+    private function setPause($admin = false, $time = null)
+    {
+        Logger::log("Pause");
+
+        if ($time === null)
+            $this->pausetimer = $this->maniaControl->getSettingManager()->getSettingValue(
+                $this,
+                self::SETTING_MATCH_PAUSE_DURATION
+            );
+        else
+            $this->pausetimer = $time;
+
+        $players = $this->maniaControl->getPlayerManager()->getPlayers();
+
+        foreach ($players as $player) {
+            if ($player->isSpectator || $player->isPureSpectator) {
+                unset($players[$player->login]);
+            } else {
+//                    Logger::log($player->login);
+
+                $pl = $this->maniaControl->getPlayerManager()->getPlayer($player);
+                if ($pl->isConnected) {
+                    try {
+                        $this->activeplayers = array_merge($this->activeplayers, array($player->login));
+                        $this->activeplayers = array_unique($this->activeplayers);
+                        $this->maniaControl->getClient()->forceSpectator($player->login, 1);
+                    } catch (InvalidArgumentException $e) {
+                    }
+                }
+            }
+        }
+
+        $this->numberpause++;
+        $numberpause = $this->numberpause;
+        $this->pauseon = true;
+
+
+        $this->maniaControl->getTimerManager()->registerOneTimeListening(
+            $this,
+            function () use (&$numberpause) {
+
+                if($numberpause == $this->numberpause)
+                    $this->unsetPause();
+                else
+                    Logger::log("Pause not stopped because another is in progress!");
+            },
+            $this->pausetimer * 1000
+        );
+
+
+        $this->displayPauseWidget($numberpause);
+
+    }
+
+    private function unsetPause()
+    {
+        if($this->pauseon) {
+            Logger::log("End Pause");
+//            $players = $this->maniaControl->getPlayerManager()->getPlayers();
+
+            foreach ($this->activeplayers as $player) {
+//                    Logger::log($player);
+                    $pl = $this->maniaControl->getPlayerManager()->getPlayer($player);
+                    if($pl->isConnected) {
+                        try {
+                            $this->maniaControl->getClient()->forceSpectator($player, 2);
+                        } catch (InvalidArgumentException $e) {
+                        }
+                    }
+            }
+
+            $this->pauseon = false;
+        }
+
+    }
+
+    public function onCommandSetPausePlayer(array $chatCallback, Player $player)
+    {
+        if (($this->matchStarted) && ($this->getMatchMode() != "TimeAttack") && (!$player->isSpectator && !$player->isPureSpectator)) {
+            if ($this->playerpause[$player->login] < $this->maniaControl->getSettingManager()->getSettingValue(
+                    $this,
+                    self::SETTING_MATCH_PAUSE_MAXNUMBER
+                )) {
+
+                if($this->pauseasked === false && $this->pauseon === false) {
+
+                    $this->maniaControl->getChat()->sendChat(
+                        '$<$0f0$o Player $z'.$player->nickname.' $z$o$0f0ask for a break of '.$this->maniaControl->getSettingManager(
+                        )->getSettingValue(
+                            $this,
+                            self::SETTING_MATCH_PAUSE_DURATION
+                        ).' seconds! It will start after this round.$>'
+                    );
+                    $this->playerpause[$player->login] = $this->playerpause[$player->login] + 1;
+                    Logger::log($this->playerpause[$player->login]." pause for ".$player->login);
+                    $this->pauseasked = true;
+                    $this->pauseaskedbyplayer = $player->login;
+//                $this->setPause();
+                }else{
+                    $this->maniaControl->getChat()->sendChat(
+                        '$<$f00$o Pause already asked by a player!$>',
+                        $player->login
+                    );
+                }
+            } else {
+                $this->maniaControl->getChat()->sendChat(
+                    '$<$f00$o Player $z'.$player->nickname.' $z$o$f00already ask too many breaks!$>',
+                    $player->login
+                );
+            }
+        }
+    }
+
+    /**
+     * @param OnScoresStructure $structure
+     */
+    public function handleEndRoundCallback(OnScoresStructure $structure)
+    {
+        //$this->maniaControl->getModeScriptEventManager()->getAllApiVersions()->setCallable(function (AllApiVersionsStructure $structure) {var_dump($structure->getVersions());} );
+//        Logger::log($structure->getSection());
+        $realSection = false;
+        if ($this->matchStarted === true) {
+            if ($structure->getSection() == "PreEndRound" && ($this->maniaControl->getSettingManager()->getSettingValue(
+                        $this,
+                        self::SETTING_MATCH_MATCH_MODE
+                    ) == "Rounds" OR $this->maniaControl->getSettingManager()->getSettingValue(
+                        $this,
+                        self::SETTING_MATCH_MATCH_MODE
+                    ) == "Cup")
+            ) {
+                $realSection = true;
+            } elseif ($structure->getSection() == "EndRound" && ($this->maniaControl->getSettingManager(
+                    )->getSettingValue($this, self::SETTING_MATCH_MATCH_MODE) == "TimeAttack")
+            ) {
+                $realSection = true;
+            } else {
+                $realSection = false;
+            }
+        }
+
+        if ($realSection) {
+
+
+            if ($this->alreadydone === false AND $this->nbmaps != 0 AND $this->nbrounds != $this->settings_nbroundsbymap) {
+                $database = "";
+                $this->currentscore = array();
+                $this->nbwinners = 0;
+                $results = $structure->getPlayerScores();
+                $realRound = false;
+
+                $pointsrepartition = $this->getPointsRepartition();
+                $pointsrepartition = explode(',', $pointsrepartition);
+
+                foreach ($results as $result) {
+                    $login = $result->getPlayer()->login;
+                    $rank = $result->getRank();
+                    $player = $result->getPlayer();
+//                    Logger::log($player->login . " PureSpec " . $player->isPureSpectator . "  Spec " . $player->isSpectator . "  Temp " . $player->isTemporarySpectator . "   Leave " . $player->isFakePlayer() . "  BestRaceTime " . $result->getBestRaceTime() . "  MatchPoints " . $result->getMatchPoints() . "  Roundpoints " . $result->getRoundPoints());
+
+                    if ($this->maniaControl->getSettingManager()->getSettingValue(
+                            $this,
+                            self::SETTING_MATCH_MATCH_MODE
+                        ) == "Cup" OR
+                        $this->maniaControl->getSettingManager()->getSettingValue(
+                            $this,
+                            self::SETTING_MATCH_MATCH_MODE
+                        ) == "Rounds") {
+                        if (($player->isSpectator && $result->getMatchPoints() == 0) || ($player->isFakePlayer(
+                                ) && $result->getMatchPoints() == 0)) {
+                        } else {
+
+                            if ($this->maniaControl->getSettingManager()->getSettingValue(
+                                    $this,
+                                    self::SETTING_MATCH_MATCH_MODE
+                                ) == "Cup"
+                            ) {
+                                $roundpoints = $result->getRoundPoints();
+                                $points = $result->getMatchPoints();
+
+//                            Logger::log($this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_MATCH_MATCH_POINTS));
+//                            Logger::log($roundpoints);
+//                            Logger::log($points);
+                                if (($points > $this->maniaControl->getSettingManager()->getSettingValue(
+                                            $this,
+                                            self::SETTING_MATCH_MATCH_POINTS
+                                        )) AND ($roundpoints == 0)
+                                ) {
+                                    //Logger::log("Winner");
+                                    $points = ($points + ($this->maniaControl->getSettingManager()->getSettingValue(
+                                                    $this,
+                                                    self::SETTING_MATCH_MATCH_NBWINNERS
+                                                ) - $this->nbwinners)) - $roundpoints;
+                                    $this->nbwinners++;
+                                } elseif (($points == $this->maniaControl->getSettingManager()->getSettingValue(
+                                            $this,
+                                            self::SETTING_MATCH_MATCH_POINTS
+                                        )) AND ($roundpoints == $pointsrepartition[0])
+                                ) {
+//                                Logger::log("Winner");
+                                    $points = ($points + ($this->maniaControl->getSettingManager()->getSettingValue(
+                                                    $this,
+                                                    self::SETTING_MATCH_MATCH_NBWINNERS
+                                                ) - $this->nbwinners)) - $roundpoints;
+                                    $this->nbwinners++;
+
+
+                                    $this->playerswinner = array_merge($this->playerswinner, array("$login"));
+                                    $this->playerswinner = array_unique($this->playerswinner);
+                                    $this->playersfinalist = array_diff($this->playersfinalist, ["$login"]);
+
+
+                                } elseif (($points + $roundpoints) >= $this->maniaControl->getSettingManager(
+                                    )->getSettingValue(
+                                        $this,
+                                        self::SETTING_MATCH_MATCH_POINTS
+                                    ) AND ($points != $this->maniaControl->getSettingManager()->getSettingValue(
+                                            $this,
+                                            self::SETTING_MATCH_MATCH_POINTS
+                                        ))
+                                ) {
+//                                Logger::log("Finalist");
+                                    $points = $this->maniaControl->getSettingManager()->getSettingValue(
+                                            $this,
+                                            self::SETTING_MATCH_MATCH_POINTS
+                                        ) - $roundpoints;
+                                    $this->playersfinalist = array_merge($this->playersfinalist, array("$login"));
+                                    $this->playersfinalist = array_unique($this->playersfinalist);
+                                }
+
+                                Logger::log($rank.", ".$login.", ".($points + $roundpoints).", ".$roundpoints);
+                                $database .= $rank.",".$login.",".($points + $roundpoints)."".PHP_EOL;
+
+                                if (!$realRound && $roundpoints > 0) {
+                                    $realRound = true;
+                                }
+
+
+                                $this->currentscore = array_merge(
+                                    $this->currentscore,
+                                    array(
+                                        array(
+                                            $rank,
+                                            $result->getPlayer()->login,
+                                            $result->getPlayer()->nickname,
+                                            ($points + $roundpoints),
+                                        ),
+                                    )
+                                );
+
+                                $this->type = "Cup";
+
+                            } elseif ($this->maniaControl->getSettingManager()->getSettingValue(
+                                    $this,
+                                    self::SETTING_MATCH_MATCH_MODE
+                                ) == "Rounds") {
+                                $roundpoints = $result->getRoundPoints();
+                                $points = $result->getMatchPoints();
+
+
+                                Logger::log($rank.", ".$login.", ".($points + $roundpoints).", ".$roundpoints);
+                                $database .= $rank.",".$login.",".($points + $roundpoints)."".PHP_EOL;
+
+                                $this->currentscore = array_merge(
+                                    $this->currentscore,
+                                    array(
+                                        array(
+                                            $rank,
+                                            $result->getPlayer()->login,
+                                            $result->getPlayer()->nickname,
+                                            ($points + $roundpoints),
+                                        ),
+                                    )
+                                );
+
+                                $this->type = "Rounds";
+                            }
+
+                        }
+                    } elseif ($this->maniaControl->getSettingManager()->getSettingValue(
+                            $this,
+                            self::SETTING_MATCH_MATCH_MODE
+                        ) == "TimeAttack"
+                    ) {
+
+                        if (($player->isSpectator && $result->getBestRaceTime(
+                                ) == 0) || ($player->isSpectator && $result->getBestRaceTime() == -1) ||
+                            ($player->isFakePlayer() && $result->getBestRaceTime() == 0) || ($player->isFakePlayer(
+                                ) && $result->getBestRaceTime() == -1)) {
+                        } else {
+                            $time = $result->getBestRaceTime();
+                            Logger::log($rank.", ".$login.", ".$time);
+                            $database .= $rank.",".$login.",".$time."".PHP_EOL;
+
+                            $this->type = "TA";
+                        }
+
+
+                    }
+
+                }
+                //Logger::log('Count number of players finish: '. count($this->times));
+
+                if (($realRound && $this->maniaControl->getSettingManager()->getSettingValue(
+                            $this,
+                            self::SETTING_MATCH_MATCH_MODE
+                        ) == "Cup") || $this->maniaControl->getSettingManager()->getSettingValue(
+                        $this,
+                        self::SETTING_MATCH_MATCH_MODE
+                    ) == "Rounds"
+                ) {
+                    $this->nbrounds++;
+                }
+
+
+                $this->scores = $database;
+
+                if ($this->type == "TA" AND !$this->alreadyDoneTA) {
+                    $mapname = $this->maniaControl->getMapManager()->getCurrentMap()->name;
+
+                    $mapname = Formatter::stripCodes($mapname);
+                    $mysqli = $this->maniaControl->getDatabase()->getMysqli();
+                    $server = $this->maniaControl->getServer()->login;
+                    $query = "INSERT INTO `".self::TABLE_MATCHS."`
+                            (`type`,`score`,`srvlogin`,`mapname`)
+                            VALUES
+                            ('$this->type','$this->scores','$server','$mapname')";
+                    Logger::log($query);
+                    $mysqli->query($query);
+                    if ($this->livePlugin) {
+                        $this->livePlugin->updateTATimes(
+                            $this->scores,
+                            $this->maniaControl->getMapManager()->getCurrentMap(),
+                            $this->nbmaps
+                        );
+                    }
+
+                    if ($mysqli->error) {
+                        trigger_error($mysqli->error);
+
+                        return false;
+                    }
+
+                    $this->alreadyDoneTA = true;
+                }
+                // Store round result in database for logs management
+                $mysqli = $this->maniaControl->getDatabase()->getMysqli();
+                $server = $this->maniaControl->getServer()->login;
+
+
+                $query = "INSERT INTO `".self::TABLE_ROUNDS."`
+				(`server`, `rounds`)
+				VALUES
+				('$server','$database')";
+                //Logger::log($query);
+                $mysqli->query($query);
+                if ($mysqli->error) {
+                    trigger_error($mysqli->error);
+
+                    return false;
+                }
+                $this->alreadydone = true;
+
+
+                //Logger::log("Rounds finished: " . $this->nbrounds);
+            }
+
+            // In case of points reset after 1st map in Recovery mode
+            if ($this->matchStarted === true && $this->maniaControl->getSettingManager()->getSettingValue(
+                    $this,
+                    self::SETTING_MATCH_MATCH_MODE
+                ) == "Cup" && $this->matchrecover === true
+            ) {
+                if ($this->nbrounds == $this->settings_nbroundsbymap) {
+                    $results = $structure->getPlayerScores();
+                    $i = 1;
+                    foreach ($results as $result) {
+                        if ($result->getPlayer()->isSpectator) {
+
+                        } else {
+                            $this->{"player".$i."_playerlogin"} = $result->getPlayer()->login;
+                            $this->{"player".$i."_points"} = $result->getMatchPoints() + $result->getRoundPoints();
+                            $i++;
+                        }
+                    }
+
+                    $this->playercount = ($i - 1);
+                    $this->restorepoints = true;
+                    $this->fakeround = true;
+                    $this->maniaControl->getMapManager()->getMapActions()->skipMap();
+
+                }
+            }
+
+        }
+
+        return true;
+    }
+
+    public function getPointsRepartition()
+    {
+        return $this->maniaControl->getSettingManager()->getSettingValue(
+            $this,
+            self::SETTING_MATCH_MATCH_POINTSREPARTITION
+        );
+    }
+
+    public function handleBeginRoundCallback()
+    {
+        $this->alreadyDoneTA = false;
+        $this->alreadydone = false;
+        $this->times = array();
+
+        if ($this->pauseasked) {
+            $this->pauseasked = false;
+            Logger::log("Set Pause");
+            $this->setPause();
+        }
+
+        if ($this->matchStarted === true && $this->fakeround === false) {
+            if ($this->maniaControl->getSettingManager()->getSettingValue(
+                    $this,
+                    self::SETTING_MATCH_MATCH_MODE
+                ) == "Rounds" OR $this->maniaControl->getSettingManager()->getSettingValue(
+                    $this,
+                    self::SETTING_MATCH_MATCH_MODE
+                ) == "Cup"
+            ) {
+                $this->maniaControl->getChat()->sendChat(
+                    '$<$ffd$o Round>'.($this->nbrounds + 1).' / '.$this->settings_nbroundsbymap.'  $w$i$F00GO GO GO  $F66!$F88!$F99!$FBB!$FDD!$FFF!$>'
+                );
+                Logger::log("Round: ".($this->nbrounds + 1).' / '.$this->settings_nbroundsbymap);
+            } elseif ($this->maniaControl->getSettingManager()->getSettingValue(
+                    $this,
+                    self::SETTING_MATCH_MATCH_MODE
+                ) == "TimeAttack"
+            ) {
+                if ($this->nbmaps > 0) {
+                    $this->maniaControl->getChat()->sendChat(
+                        '$<$ffd$o Map>'.($this->nbmaps).'   $w$i$F00GO GO GO  $F66!$F88!$F99!$FBB!$FDD!$FFF!$>'
+                    );
+                    Logger::log("Map: ".$this->nbmaps);
+                }
+            }
+        }
+
+
+        // Recovering mode (Nadeo's Cup script can reset points after 1st map)
+        if ($this->maniaControl->getSettingManager()->getSettingValue(
+                $this,
+                self::SETTING_MATCH_MATCH_MODE
+            ) == "Cup" && $this->matchrecover === true && $this->restorepoints === true && $this->fakeround === false
+        ) {
+
+            for ($i = 1; $i <= $this->playercount; $i++) {
+                if ($this->{"player".$i."_playerlogin"} != "") {
+                    $player = $this->maniaControl->getPlayerManager()->getPlayer($this->{"player".$i."_playerlogin"});
+                    $this->maniaControl->getModeScriptEventManager()->setTrackmaniaPlayerPoints(
+                        $player,
+                        "",
+                        "",
+                        $this->{"player".$i."_points"}
+                    );
+                    $this->maniaControl->getChat()->sendChat(
+                        '$<$0f0$o Player $z'.$player->nickname.' $z$o$0f0has now '.$this->{"player".$i."_points"}.' points!$>'
+                    );
+                    Logger::log('Player '.$player->login.' has now '.$this->{"player".$i."_points"}.' points!');
+                }
+            }
+            $this->restorepoints = false;
+            $this->matchrecover = false;
+        }
+    }
+
+    public function handleEndMapCallback()
+    {
+
+        if ($this->matchStarted) {
+            if ($this->maniaControl->getSettingManager()->getSettingValue(
+                    $this,
+                    self::SETTING_MATCH_MATCH_MODE
+                ) == "Rounds"
+            ) {
+
+                if ($this->settings_nbmapsbymatch == $this->nbmaps) {
+
+                    if ($this->nbrounds == $this->settings_nbroundsbymap) {
+
+                        $this->MatchEnd();
+                    }
+                }
+            } elseif ($this->maniaControl->getSettingManager()->getSettingValue(
+                    $this,
+                    self::SETTING_MATCH_MATCH_MODE
+                ) == "TimeAttack"
+            ) {
+                if ($this->nbmaps == $this->settings_nbmapsbymatch) {
+                    $this->MatchEnd();
+                }
+
+            } elseif ($this->maniaControl->getSettingManager()->getSettingValue(
+                    $this,
+                    self::SETTING_MATCH_MATCH_MODE
+                ) == "Cup"
+            ) {
+
+                if ($this->maniaControl->getSettingManager()->getSettingValue(
+                        $this,
+                        self::SETTING_MATCH_MATCH_NBWINNERS
+                    ) == $this->nbwinners
+                ) {
+                    $this->MatchEnd();
+                } elseif (count($this->playerswinner) == $this->maniaControl->getSettingManager()->getSettingValue(
+                        $this,
+                        self::SETTING_MATCH_MATCH_NBWINNERS
+                    ) AND count($this->playerswinner) > 0) {
+                    $this->MatchEnd();
+                }
+
+            }
+            $this->fakeround = false;
+
+            if (($this->pauseasked) && $this->maniaControl->getSettingManager()->getSettingValue($this,self::SETTING_MATCH_MATCH_NBWARMUP) > 0)
+            {
+                $this->pauseasked = false;
+                $this->playerpause[$this->pauseaskedbyplayer]--;
+                $this->pauseaskedbyplayer = "";
+                $this->maniaControl->getChat()->sendChat(
+                    '$<$f00$o Pause cancelled because of a WarmUp!$>');
+            }
+        }
+    }
+
+    public function MatchEnd()
+    {
+        $scriptName = $this->maniaControl->getSettingManager()->getSettingValue(
+            $this,
+            self::SETTING_MATCH_NOMATCH_MODE
+        );
+        $scriptName .= '.Script.txt';
+
+        $loadedSettings = array(
+            'S_TimeLimit' => 600,
+            self::SETTING_MATCH_MATCH_ALLOWREPASWN => true,
+            self::SETTING_MATCH_MATCH_NBWARMUP => 0,
+        );
+
+        try {
+            $this->livePlugin = $this->maniaControl->getPluginManager()->getPlugin(self::DEFAULT_TRACKMANIALIVE_PLUGIN);
+            if ($this->livePlugin) {
+                $this->livePlugin->MatchEnd();
+            }
+
+
+            if ($this->type == "Cup") {
+                $mysqli = $this->maniaControl->getDatabase()->getMysqli();
+                $server = $this->maniaControl->getServer()->login;
+                $query = "INSERT INTO `".self::TABLE_MATCHS."`
+				(`type`,`score`,`srvlogin`)
+				VALUES
+				('$this->type','$this->scores','$server')";
+                //Logger::log($query);
+                $mysqli->query($query);
+                if ($mysqli->error) {
+                    trigger_error($mysqli->error);
+
+                    return false;
+                }
+            } elseif ($this->type == "TA") {
+                if ($this->livePlugin) {
+                    $this->livePlugin->endTA();
+                }
+            }
+
+            $this->loadScript($scriptName, $loadedSettings);
+            $this->maniaControl->getChat()->sendSuccess("Match finished");
+            Logger::log("Match finished");
+            $this->matchStarted = false;
+
+            $this->matchSettings = $loadedSettings;
+
+            $players = $this->maniaControl->getPlayerManager()->getPlayers();
+
+            foreach ($players as $player) {
+                $this->handlePlayerConnect($player);
+            }
+
+            $this->currentscore = "";
+
+        } catch (Exception $e) {
+            $this->maniaControl->getChat()->sendError("Can not finish match: ".$e->getMessage());
+        }
+    }
+
+    public function handleBeginMapCallback()
+    {
+
+        if ($this->matchStarted === true) {
+            $this->nbmaps++;
+            if (!$this->matchrecover2) {
+                $this->nbrounds = 0;
+            } else {
+                $this->matchrecover2 = false;
+            }
+            if ($this->nbmaps > 0) {
+                Logger::log("Map: ".$this->nbmaps);
+
+                $maps = $this->maniaControl->getMapManager()->getMaps();
+                $i = 1;
+                $this->maniaControl->getChat()->sendChat('$<$fff$o$i>>>Current Map$>');
+                $currentmap = $this->maniaControl->getMapManager()->getCurrentMap();
+                $this->maniaControl->getChat()->sendChat(
+                    '$<$fff$o$i'.Formatter::stripCodes($currentmap->name).'$>'
+                );
+                Logger::log("Current Map: ".Formatter::stripCodes($currentmap->name));
+                $continue = false;
+                $current = false;
+                foreach ($maps as $map) {
+
+                    if ($currentmap->uid == $map->uid) {
+                        $continue = true;
+                        $current = true;
+                    }
+
+                    if ($continue && $this->nbmaps < $this->settings_nbmapsbymatch) {
+                        if ($current) {
+                            $this->maniaControl->getChat()->sendChat('$<$fff$o$i>>>Next Maps$>');
+                            $current = false;
+                        } elseif (($this->nbmaps + $i) <= ($this->settings_nbmapsbymatch)) {
+                            if ($i > 0) {
+                                Logger::log("Map ".$i.": ".Formatter::stripCodes($map->name));
+                                $this->maniaControl->getChat()->sendChat(
+                                    '$<$fff$o$i'.$i.': '.Formatter::stripCodes($map->name).'$>'
+                                );
+                            }
+                            $nbmaps = $this->maniaControl->getMapManager()->getMapsCount();
+                            $i++;
+                            if ($this->nbmaps == ($nbmaps - ($i - 1) + 1) OR $this->settings_nbmapsbymatch == (($i - 1) + $this->nbmaps - 1)) {
+                                $continue = false;
+                            }
+
+
+                        }
+                    }
+                }
+            }
+
+        }
+    }
+
+    public function onCommandMatchStart(array $chatCallback, Player $player)
+    {
+        $authLevel = $this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_MATCH_AUTHLEVEL);
+        if (!$this->maniaControl->getAuthenticationManager()->checkRight($player, $authLevel)) {
+            $this->maniaControl->getAuthenticationManager()->sendNotAllowed($player);
+
+            return;
+        }
+        $this->MatchStart();
+    }
+
     public function onCommandMatchRecover(array $chatCallback, Player $player)
     {
         $authLevel = $this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_MATCH_AUTHLEVEL);
@@ -1471,7 +1872,6 @@ class MatchPlugin implements ManialinkPageAnswerListener, CallbackListener, Comm
         }
         $this->MatchRecover($nbmaps, $nbrounds, $id);
     }
-
 
     /**
      * @param $nbmaps
@@ -1626,23 +2026,29 @@ class MatchPlugin implements ManialinkPageAnswerListener, CallbackListener, Comm
             Logger::log($matchdetail);
             $this->maniaControl->getChat()->sendInformation($matchdetail);
 
-            $respawn = (!isset($this->scriptSettings['S_AllowRespawn']) || is_null($this->scriptSettings['S_AllowRespawn'])) ? '0' : $this->scriptSettings['S_AllowRespawn'];
+            $respawn = (!isset($this->scriptSettings['S_AllowRespawn']) || is_null(
+                    $this->scriptSettings['S_AllowRespawn']
+                )) ? '0' : $this->scriptSettings['S_AllowRespawn'];
 
             if ($script['CurrentValue'] == "Cup.Script.txt") {
-                $matchdetail = "S_PointsLimit => ".$this->scriptSettings['S_PointsLimit'].", S_NbOfWinners => " .$this->scriptSettings['S_NbOfWinners'].", S_AllowRespawn => ".$respawn.
-                    ",S_RoundsPerMap => ".$this->scriptSettings['S_RoundsPerMap'].", S_MapsPerMatch => " .(int)$this->maniaControl->getSettingManager()->getSettingValue($this,self::SETTING_MATCH_MATCH_NBMAPS).
-                    ",S_WarmUpNb => ".$this->scriptSettings['S_WarmUpNb'].", S_FinishTimeout => " .$this->scriptSettings['S_FinishTimeout'];
+                $matchdetail = "S_PointsLimit => ".$this->scriptSettings['S_PointsLimit'].", S_NbOfWinners => ".$this->scriptSettings['S_NbOfWinners'].", S_AllowRespawn => ".$respawn.
+                    ",S_RoundsPerMap => ".$this->scriptSettings['S_RoundsPerMap'].", S_MapsPerMatch => ".(int)$this->maniaControl->getSettingManager(
+                    )->getSettingValue($this, self::SETTING_MATCH_MATCH_NBMAPS).
+                    ",S_WarmUpNb => ".$this->scriptSettings['S_WarmUpNb'].", S_FinishTimeout => ".$this->scriptSettings['S_FinishTimeout'];
                 $matchdetail = $matchdetail.", PointsRepartition: ".$this->maniaControl->getSettingManager(
                     )->getSettingValue($this, self::SETTING_MATCH_MATCH_POINTSREPARTITION);
-            }elseif ($script['CurrentValue'] == "Rounds.Script.txt") {
-                $matchdetail = "S_PointsLimit => ".$this->scriptSettings['S_PointsLimit'].", S_NbOfWinners => " .$this->scriptSettings['S_NbOfWinners'].", S_AllowRespawn => ".$respawn.
-                    ",S_RoundsPerMap => ".$this->scriptSettings['S_RoundsPerMap'].", S_MapsPerMatch => " .$this->scriptSettings['S_MapsPerMatch'].
-                    ",S_WarmUpNb => ".$this->scriptSettings['S_WarmUpNb'].", S_FinishTimeout => " .$this->scriptSettings['S_FinishTimeout'];
+            } elseif ($script['CurrentValue'] == "Rounds.Script.txt") {
+                $matchdetail = "S_PointsLimit => ".$this->scriptSettings['S_PointsLimit'].", S_NbOfWinners => ".$this->scriptSettings['S_NbOfWinners'].", S_AllowRespawn => ".$respawn.
+                    ",S_RoundsPerMap => ".$this->scriptSettings['S_RoundsPerMap'].", S_MapsPerMatch => ".$this->scriptSettings['S_MapsPerMatch'].
+                    ",S_WarmUpNb => ".$this->scriptSettings['S_WarmUpNb'].", S_FinishTimeout => ".$this->scriptSettings['S_FinishTimeout'];
                 $matchdetail = $matchdetail.", PointsRepartition: ".$this->maniaControl->getSettingManager(
                     )->getSettingValue($this, self::SETTING_MATCH_MATCH_POINTSREPARTITION);
-            }elseif ($script['CurrentValue'] == "TimeAttack.Script.txt"){
-                $matchdetail = "S_TimeLimit => ".$this->scriptSettings['S_TimeLimit'].", S_MapsPerMatch => " .$this->maniaControl->getSettingManager()->getSettingValue(
-                        $this,self::SETTING_MATCH_MATCH_NBMAPS).", S_AllowRespawn => ".$respawn
+            } elseif ($script['CurrentValue'] == "TimeAttack.Script.txt") {
+                $matchdetail = "S_TimeLimit => ".$this->scriptSettings['S_TimeLimit'].", S_MapsPerMatch => ".$this->maniaControl->getSettingManager(
+                    )->getSettingValue(
+                        $this,
+                        self::SETTING_MATCH_MATCH_NBMAPS
+                    ).", S_AllowRespawn => ".$respawn
                     .",S_WarmUpDuration => ".$this->scriptSettings['S_WarmUpDuration'];
             }
 
@@ -1677,8 +2083,9 @@ class MatchPlugin implements ManialinkPageAnswerListener, CallbackListener, Comm
     public function handleFinishCallback(OnWayPointEventStructure $structure)
     {
 
+
         if ($this->matchStarted) {
-            //Logger::log("Enter Finish");
+//            Logger::log("Enter Finish");
             if ($structure->getRaceTime() <= 0) {
                 // Invalid time
                 return;
@@ -1700,22 +2107,12 @@ class MatchPlugin implements ManialinkPageAnswerListener, CallbackListener, Comm
 
     }
 
-    public function handlePlayerConnect(Player $player)
-    {
-        if ($player->isSpectator) {
-            $this->playerstate[$player->login] = -1;
-        } else {
-            $this->playerstate[$player->login] = 0;
-            $this->nbplayers++;
-            $this->displayWidgets($player->login);
-        }
-    }
-
     public function handlePlayerDisconnect(Player $player)
     {
         $this->playerstate[$player->login] = -1;
         $this->nbplayers--;
-        $this->closeWidget($player->login);
+        $this->closeReadyWidget($player->login);
+        $this->closePauseWidget($player->login);
     }
 
     public function handlePlayerInfoChanged(Player $player)
@@ -1732,7 +2129,7 @@ class MatchPlugin implements ManialinkPageAnswerListener, CallbackListener, Comm
                 }
 
                 $this->playerstate[$player->login] = -1;
-                $this->closeWidget($player->login);
+                $this->closeReadyWidget($player->login);
             } else {
                 if ($this->playerstate[$player->login] == -1) {
                     $this->nbplayers++;
@@ -1744,66 +2141,6 @@ class MatchPlugin implements ManialinkPageAnswerListener, CallbackListener, Comm
             }
         }
 
-    }
-
-    private function displayWidgets($login)
-    {
-        if ($this->maniaControl->getSettingManager()->getSettingValue(
-                $this,
-                self::SETTING_MATCH_READY_MODE
-            ) && (!$this->matchStarted)
-        ) {
-            $this->displayReadyWidget($login);
-        } else {
-            $this->playerstate[$login] = 0;
-            $this->closeWidget($login);
-        }
-    }
-
-    /**
-     * Displays the Ready Widget
-     *
-     * @param bool $login
-     */
-    public function displayReadyWidget($login)
-    {
-        $posX = $this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_MATCH_READY_POSX);
-        $posY = $this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_MATCH_READY_POSY);
-        $width = $this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_MATCH_READY_WIDTH);
-        $height = $this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_MATCH_READY_HEIGHT);
-        $quadStyle = $this->maniaControl->getManialinkManager()->getStyleManager()->getDefaultQuadStyle();
-        $quadSubstyle = $this->maniaControl->getManialinkManager()->getStyleManager()->getDefaultQuadSubstyle();
-
-        $maniaLink = new ManiaLink(self::MLID_MATCH_READY_WIDGET);
-
-        // mainframe
-        $frame = new Frame();
-        $maniaLink->addChild($frame);
-        $frame->setSize($width, $height);
-        $frame->setPosition($posX, $posY);
-
-        // Background Quad
-        $backgroundQuad = new Quad();
-        $frame->addChild($backgroundQuad);
-        $backgroundQuad->setSize($width, $height);
-        $backgroundQuad->setStyles($quadStyle, $quadSubstyle);
-        $backgroundQuad->setAction(self::ACTION_READY);
-
-        $label = new Label_Text();
-        $frame->addChild($label);
-        $label->setPosition(0, 1.5, 0.2);
-        $label->setVerticalAlign($label::TOP);
-        $label->setTextSize(2);
-
-        if ($this->playerstate[$login] == 1) {
-            $label->setTextColor('0f0');
-        } else {
-            $label->setTextColor('f00');
-        }
-        $label->setText("Ready?");
-
-        // Send manialink
-        $this->maniaControl->getManialinkManager()->sendManialink($maniaLink, $login);
     }
 
     public function handleReady(array $callback, Player $player)
@@ -1819,15 +2156,6 @@ class MatchPlugin implements ManialinkPageAnswerListener, CallbackListener, Comm
             $this->displayWidgets($player->login);
             $this->maniaControl->getChat()->sendChat("Match: ".$player->nickname.' $<$z$f00Not Ready$>');
         }
-    }
-
-    /**
-     * Close Ready Widget
-     *
-     */
-    public function closeWidget($login = null)
-    {
-        $this->maniaControl->getManialinkManager()->hideManialink(self::MLID_MATCH_READY_WIDGET, $login);
     }
 
     /**
