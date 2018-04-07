@@ -37,8 +37,8 @@ class MatchWidgetPlugin implements ManialinkPageAnswerListener, CallbackListener
     /*
      * Constants
      */
-    const PLUGIN_ID = 999;
-    const PLUGIN_VERSION = 0.2;
+    const PLUGIN_ID = 127;
+    const PLUGIN_VERSION = 0.42;
     const PLUGIN_NAME = 'MatchWidgetPlugin';
     const PLUGIN_AUTHOR = 'jonthekiller';
 
@@ -53,6 +53,8 @@ class MatchWidgetPlugin implements ManialinkPageAnswerListener, CallbackListener
     const SETTING_MATCHWIDGET_LIVE_HEIGHT = 'MatchWidgetPlugin-Widget-Size: Height';
     const SETTING_MATCHWIDGET_LIVE_LINE_HEIGHT = 'MatchWidgetPlugin-Widget-Lines: Height';
     const DEFAULT_MATCH_PLUGIN = 'Drakonia\MatchPlugin';
+    const SETTINGS_MATCHWIDGET_MOVE_RACE_RANKING = 'Move Race Ranking to right';
+    const SETTINGS_MATCHWIDGET_HIDE_SPEC = 'Hide Spec Icon';
 
     const MATCH_ACTION_SPEC = 'Spec.Action';
 
@@ -157,7 +159,7 @@ class MatchWidgetPlugin implements ManialinkPageAnswerListener, CallbackListener
 
 
         $this->maniaControl->getTimerManager()->registerTimerListening($this, 'handle10Seconds', 10000);
-        $this->maniaControl->getTimerManager()->registerTimerListening($this, 'handle1Second', 1000);
+
 
         $this->maniaControl->getCallbackManager()->registerCallbackListener(
             CallbackManager::CB_MP_PLAYERMANIALINKPAGEANSWER,
@@ -168,6 +170,8 @@ class MatchWidgetPlugin implements ManialinkPageAnswerListener, CallbackListener
 
         // Settings
         $this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_MATCHWIDGET_LIVE_ACTIVATED, true);
+        $this->maniaControl->getSettingManager()->initSetting($this, self::SETTINGS_MATCHWIDGET_MOVE_RACE_RANKING, true);
+        $this->maniaControl->getSettingManager()->initSetting($this, self::SETTINGS_MATCHWIDGET_HIDE_SPEC, true);
         $this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_MATCHWIDGET_LIVE_POSX, -139);
         $this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_MATCHWIDGET_LIVE_POSY, 40);
         $this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_MATCHWIDGET_LIVE_LINESCOUNT, 4);
@@ -181,11 +185,16 @@ class MatchWidgetPlugin implements ManialinkPageAnswerListener, CallbackListener
             $this->active = true;
         } else {
             $this->active = false;
+            $this->ranking = array();
         }
 
         $this->matchPlugin = $this->maniaControl->getPluginManager()->getPlugin(self::DEFAULT_MATCH_PLUGIN);
 
         $this->displayWidgets();
+
+        $this->moveRaceRanking();
+
+        $this->hideSpecIcon();
 
         return true;
     }
@@ -204,7 +213,7 @@ class MatchWidgetPlugin implements ManialinkPageAnswerListener, CallbackListener
                 $this,
                 self::SETTING_MATCHWIDGET_LIVE_ACTIVATED
             )) {
-                $this->displayCheckpointsLiveWidget();
+                $this->displayMatchLiveWidget();
             }
         }
 
@@ -212,46 +221,52 @@ class MatchWidgetPlugin implements ManialinkPageAnswerListener, CallbackListener
     }
 
     /**
-     * Displays the Checkpoints Live Widget
+     * Displays the Match Live Widget
      *
      * @param bool $login
      */
-    public function displayCheckpointsLiveWidget($login = false)
+    public function displayMatchLiveWidget($login = false)
     {
         $posX = $this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_MATCHWIDGET_LIVE_POSX);
         $posY = $this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_MATCHWIDGET_LIVE_POSY);
         $width = $this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_MATCHWIDGET_LIVE_WIDTH);
+        $lineHeight         = $this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_MATCHWIDGET_LIVE_LINE_HEIGHT);
+        $lines              = $this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_MATCHWIDGET_LIVE_LINESCOUNT);
         $height = $this->maniaControl->getSettingManager()->getSettingValue(
             $this,
             self::SETTING_MATCHWIDGET_LIVE_HEIGHT
         );
+        $height            = 7. + $lines * $lineHeight;
         $labelStyle = $this->maniaControl->getManialinkManager()->getStyleManager()->getDefaultLabelStyle();
         $quadSubstyle = $this->maniaControl->getManialinkManager()->getStyleManager()->getDefaultQuadSubstyle();
         $quadStyle = $this->maniaControl->getManialinkManager()->getStyleManager()->getDefaultQuadStyle();
 
-        $maniaLink = new ManiaLink(self::MLID_MATCHWIDGET_LIVE_WIDGET);
 
         // mainframe
         $frame = new Frame();
-        $maniaLink->addChild($frame);
-        $frame->setSize($width, $height);
         $frame->setPosition($posX, $posY);
+//        $maniaLink->addChild($frame);
+//        $frame->setSize($width, $height);
+
 
         // Background Quad
         $backgroundQuad = new Quad();
         $frame->addChild($backgroundQuad);
+        $backgroundQuad->setVerticalAlign($backgroundQuad::TOP);
         $backgroundQuad->setSize($width, $height);
         $backgroundQuad->setStyles($quadStyle, $quadSubstyle);
 
         $titleLabel = new Label();
         $frame->addChild($titleLabel);
-        $titleLabel->setPosition(0, 9);
+        $titleLabel->setPosition(0, $lineHeight * -0.9);
         $titleLabel->setWidth($width);
         $titleLabel->setStyle($labelStyle);
         $titleLabel->setTextSize(2);
         $titleLabel->setText("Match Live");
         $titleLabel->setTranslate(true);
 
+        $maniaLink = new ManiaLink(self::MLID_MATCHWIDGET_LIVE_WIDGET);
+        $maniaLink->addChild($frame);
         // Send manialink
         $this->maniaControl->getManialinkManager()->sendManialink($maniaLink, $login);
     }
@@ -268,6 +283,8 @@ class MatchWidgetPlugin implements ManialinkPageAnswerListener, CallbackListener
             $this->displayWidgets();
         } else {
             $this->active = false;
+            //Reset ranking
+            $this->ranking = array();
             $this->closeWidget(self::MLID_MATCHWIDGET_LIVE_WIDGETTIMES);
             $this->closeWidget(self::MLID_MATCHWIDGET_LIVE_WIDGET);
         }
@@ -283,15 +300,6 @@ class MatchWidgetPlugin implements ManialinkPageAnswerListener, CallbackListener
         $this->maniaControl->getManialinkManager()->hideManialink($widgetId);
     }
 
-    /**
-     * Handle ManiaControl After Init
-     */
-    public function handle1Second()
-    {
-//        if($this->active){
-//            $this->updateWidget($this->ranking);
-//        }
-    }
 
     public function updateWidget($ranking)
     {
@@ -321,9 +329,9 @@ class MatchWidgetPlugin implements ManialinkPageAnswerListener, CallbackListener
 
 
         $maniaLink = new ManiaLink(self::MLID_MATCHWIDGET_LIVE_WIDGETTIMES);
-        $frame = new Frame();
-        $maniaLink->addChild($frame);
-        $frame->setPosition($posX, $posY);
+        $listFrame = new Frame();
+        $maniaLink->addChild($listFrame);
+        $listFrame->setPosition($posX, $posY);
 
         // Obtain a list of columns
         $finalist = array();
@@ -355,11 +363,11 @@ class MatchWidgetPlugin implements ManialinkPageAnswerListener, CallbackListener
 
             $player = $this->maniaControl->getPlayerManager()->getPlayer($record['login']);
 
-            $y = -1. - $index * $lineHeight;
+            $y = -10 - ($index) * $lineHeight;
 
             $recordFrame = new Frame();
-            $frame->addChild($recordFrame);
-            $recordFrame->setPosition(0, $y + 5);
+            $listFrame->addChild($recordFrame);
+            $recordFrame->setPosition(0, $y + $lineHeight / 2);
 
             //Rank
             $rankLabel = new Label();
@@ -486,6 +494,13 @@ class MatchWidgetPlugin implements ManialinkPageAnswerListener, CallbackListener
                         }
 
 
+                    }elseif ($this->script == "Rounds.Script.txt") {
+                        $roundpoints = $result->getRoundPoints();
+                        $points = $result->getMatchPoints();
+
+                        $this->ranking[] = array("login" => $login, "points" => ($points + $roundpoints), "finalist" => 0, "rank" => $rank);
+
+
                     }
 
 
@@ -558,7 +573,7 @@ function handlePlayerConnect(Player $player)
             $this,
             self::SETTING_MATCHWIDGET_LIVE_ACTIVATED
         )) {
-            $this->displayCheckpointsLiveWidget($player->login);
+            $this->displayMatchLiveWidget($player->login);
         }
     }
 }
@@ -574,8 +589,53 @@ function updateSettings(Setting $setting)
 {
     if ($setting->belongsToClass($this)) {
         $this->displayWidgets();
+        $this->moveRaceRanking();
+        $this->hideSpecIcon();
     }
 }
 
+public function moveRaceRanking()
+{
+    if ($this->maniaControl->getSettingManager()->getSettingValue(
+        $this,
+        self::SETTINGS_MATCHWIDGET_MOVE_RACE_RANKING
+    )) {
+        $properties = "<ui_properties>
+    <round_scores pos='108.5 50. 150.' visible='true' />
+  </ui_properties>";
+
+        Logger::log('Put Race Ranking Widget to the right');
+        $this->maniaControl->getModeScriptEventManager()->setTrackmaniaUIProperties($properties);
+
+    }else{
+        $properties = "<ui_properties>
+    <round_scores pos='-158.5 40. 150.' visible='true' />
+  </ui_properties>";
+        Logger::log('Put Race Ranking Widget to the original place');
+        $this->maniaControl->getModeScriptEventManager()->setTrackmaniaUIProperties($properties);
+
+    }
+}
+
+    public function hideSpecIcon()
+    {
+        if ($this->maniaControl->getSettingManager()->getSettingValue(
+            $this,
+            self::SETTINGS_MATCHWIDGET_HIDE_SPEC
+        )) {
+            $properties = "<ui_properties><viewers_count visible='false'/></ui_properties>";
+
+            Logger::log('Hide Spec Icon');
+            $this->maniaControl->getModeScriptEventManager()->setTrackmaniaUIProperties($properties);
+
+        }else{
+            $properties = "<ui_properties>
+    <viewers_count visible='true' pos='157. -40. 5.\' />
+  </ui_properties>";
+            Logger::log('Show Spec Icon');
+            $this->maniaControl->getModeScriptEventManager()->setTrackmaniaUIProperties($properties);
+
+        }
+    }
 
 }
