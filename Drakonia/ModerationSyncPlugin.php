@@ -13,9 +13,12 @@ use ManiaControl\Callbacks\Callbacks;
 use ManiaControl\Callbacks\TimerListener;
 use ManiaControl\Logger;
 use ManiaControl\ManiaControl;
+use ManiaControl\Players\Player;
+use ManiaControl\Players\PlayerManager;
 use ManiaControl\Plugins\Plugin;
 use ManiaControl\Settings\Setting;
 use ManiaControl\Settings\SettingManager;
+use Maniaplanet\DedicatedServer\InvalidArgumentException;
 use Maniaplanet\DedicatedServer\Xmlrpc\AlreadyInListException;
 use Maniaplanet\DedicatedServer\Xmlrpc\NotInListException;
 use Maniaplanet\DedicatedServer\Xmlrpc\UnknownPlayerException;
@@ -27,7 +30,7 @@ class ModerationSyncPlugin implements CallbackListener, TimerListener, Plugin
 * Constants
 */
     const PLUGIN_ID = 130;
-    const PLUGIN_VERSION = 0.1;
+    const PLUGIN_VERSION = 0.2;
     const PLUGIN_NAME = 'ModerationSyncPlugin';
     const PLUGIN_AUTHOR = 'jonthekiller';
 
@@ -96,9 +99,14 @@ class ModerationSyncPlugin implements CallbackListener, TimerListener, Plugin
         $this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_MODERATIONSYNC_ACTIVATED, true);
 
         // Callbacks
+        $this->maniaControl->getCallbackManager()->registerCallbackListener(
+            PlayerManager::CB_PLAYERCONNECT,
+            $this,
+            'handlePlayerConnect'
+        );
         $this->maniaControl->getCallbackManager()->registerCallbackListener(SettingManager::CB_SETTING_CHANGED, $this, 'updateSettings');
 
-        $this->maniaControl->getTimerManager()->registerTimerListening($this, 'handle60Seconds', 60000);
+        //$this->maniaControl->getTimerManager()->registerTimerListening($this, 'handle60Seconds', 60000);
 
         $this->initTables();
         $this->init();
@@ -151,8 +159,55 @@ class ModerationSyncPlugin implements CallbackListener, TimerListener, Plugin
 
     }
 
+
+    public function handlePlayerConnect(Player $player)
+    {
+        // Check if force ignore
+        $mysqli = $this->maniaControl->getDatabase()->getMysqli();
+        // Get the ignorelist from the database
+        $query = "SELECT `playerIndex` FROM `drakonia_ignorelist`
+					WHERE `ignored` = 1 AND `playerIndex` = $player->index;";
+//        Logger::log($query);
+        $result = $mysqli->query($query);
+        if ($mysqli->error) {
+            trigger_error($mysqli->error);
+            return null;
+        }
+        while ($ignore = $result->fetch_object()) {
+            try {
+                if (!$player->isMuted()) {
+                    $this->maniaControl->getClient()->ignore($player);
+                }
+            } catch (UnknownPlayerException $e) {
+                return false;
+            } catch (InvalidArgumentException $e) {
+            }
+        }
+
+        // Check if force ban
+        $mysqli = $this->maniaControl->getDatabase()->getMysqli();
+        // Get the ignorelist from the database
+        $query = "SELECT `playerIndex` FROM `drakonia_banlist`
+					WHERE `banned` = 1 AND `playerIndex` = $player->index;";
+//        Logger::log($query);
+        $result = $mysqli->query($query);
+        if ($mysqli->error) {
+            trigger_error($mysqli->error);
+            return null;
+        }
+        while ($ignore = $result->fetch_object()) {
+            try {
+                $this->maniaControl->getClient()->ban($player->login);
+            } catch (UnknownPlayerException $e) {
+                return false;
+            } catch (InvalidArgumentException $e) {
+            }
+        }
+    }
+
     public function manageIgnoreList()
     {
+        Logger::log("Refresh Ignorelist");
         $mysqli = $this->maniaControl->getDatabase()->getMysqli();
         // Get the ignorelist from the database
         $query = "SELECT `playerIndex` FROM `drakonia_ignorelist`
@@ -249,10 +304,12 @@ class ModerationSyncPlugin implements CallbackListener, TimerListener, Plugin
 
             $target = $this->maniaControl->getPlayerManager()->getPlayerByIndex($ignore->playerIndex);
 
-            if ($target->isConnected) {
+//            Logger::log("Mute player: ".$target->login);
+            if (!$target->isMuted()) {
+                Logger::log("Mute player: ".$target->login);
                 try {
                     $this->maniaControl->getClient()->ignore($target);
-                } catch (AlreadyInListException $e) {
+                } catch (UnknownPlayerException $e) {
                     return false;
                 }
             }
@@ -263,6 +320,7 @@ class ModerationSyncPlugin implements CallbackListener, TimerListener, Plugin
 
     public function manageBanList()
     {
+        Logger::log("Refresh Banlist");
         $mysqli = $this->maniaControl->getDatabase()->getMysqli();
         // Get the banlist from the database
         $query = "SELECT `playerIndex` FROM `drakonia_banlist`
@@ -361,6 +419,7 @@ class ModerationSyncPlugin implements CallbackListener, TimerListener, Plugin
 
 
             if ($target->isConnected) {
+                Logger::log("Ban player: ".$target->login);
                 try {
                     $this->maniaControl->getClient()->ban($target->login);
                 } catch (UnknownPlayerException $e) {

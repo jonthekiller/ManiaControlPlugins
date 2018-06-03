@@ -26,7 +26,7 @@ class LocalRecordsCPLivePlugin implements CallbackListener, TimerListener, Plugi
 	* Constants
 	*/
 	const PLUGIN_ID      = 115;
-	const PLUGIN_VERSION = 0.33;
+	const PLUGIN_VERSION = 0.35;
 	const PLUGIN_NAME    = 'LocalRecordsCPLivePlugin';
 	const PLUGIN_AUTHOR  = 'jonthekiller, Jaka Vrhovec';
 
@@ -42,6 +42,7 @@ class LocalRecordsCPLivePlugin implements CallbackListener, TimerListener, Plugi
 	const SETTING_LRCPLIVE_TEXT_SIZE      = 'Text Size';
 	const SETTING_LRCPLIVE_SHOWPLAYERS      = 'Show for Players';
 	const SETTING_LRCPLIVE_SHOWSPECTATORS     = 'Show for Spectators';
+	const SETTING_LRCPLIVE_MAXNUMBERPLAYERS     = 'Show if less players than';
 
 
 	const DEFAULT_LOCALRECORDS_PLUGIN = 'MCTeam\LocalRecordsPlugin';
@@ -51,6 +52,7 @@ class LocalRecordsCPLivePlugin implements CallbackListener, TimerListener, Plugi
 	private $maniaControl         = null;
 	private $active = false;
 	private $dediactive = false;
+	private $notmuchplayers = true;
 	private $LocalRecordsPlugin = "";
 	private $DedimaniaPlugin = "";
 	private $localrecord = array();
@@ -119,6 +121,7 @@ class LocalRecordsCPLivePlugin implements CallbackListener, TimerListener, Plugi
 		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_LRCPLIVE_WIDGET3_POSY, 70);
 		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_LRCPLIVE_SHOWPLAYERS, true);
 		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_LRCPLIVE_SHOWSPECTATORS, true);
+		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_LRCPLIVE_MAXNUMBERPLAYERS, 100);
 
 		// Callbacks
 
@@ -152,31 +155,37 @@ class LocalRecordsCPLivePlugin implements CallbackListener, TimerListener, Plugi
 	{
 
 		$this->maniaControl->getTimerManager()->registerOneTimeListening($this, function () use (&$player) {
-			$this->LocalRecordsPlugin = $this->maniaControl->getPluginManager()->getPlugin(self::DEFAULT_LOCALRECORDS_PLUGIN);
-			$this->DedimaniaPlugin = $this->maniaControl->getPluginManager()->getPlugin(self::DEFAULT_DEDIMANIA_PLUGIN);
 
-			if($this->LocalRecordsPlugin)
-			{
-				$this->active = true;
-				Logger::log("Can load LRCPLive plugin");
-			}else{
-				$this->maniaControl->getChat()->sendErrorToAdmins('Please activate first the LocalRecords plugin');
-			}
+            $numberplayers = $this->maniaControl->getPlayerManager()->getPlayerCount(false);
 
-			if($this->DedimaniaPlugin)
-			{
-				$this->dediactive = true;
-				Logger::log("Can load LRCPLive Dedimania plugin");
-			}else{
-				$this->maniaControl->getChat()->sendErrorToAdmins('Please activate first the Dedimania plugin');
-			}
+            if ($numberplayers < ($this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_LRCPLIVE_MAXNUMBERPLAYERS) +1)) {
+                $this->notmuchplayers = true;
+                $this->LocalRecordsPlugin = $this->maniaControl->getPluginManager()->getPlugin(self::DEFAULT_LOCALRECORDS_PLUGIN);
+                $this->DedimaniaPlugin = $this->maniaControl->getPluginManager()->getPlugin(self::DEFAULT_DEDIMANIA_PLUGIN);
 
-			$players = $this->maniaControl->getPlayerManager()->getPlayers();
+                if ($this->LocalRecordsPlugin) {
+                    $this->active = true;
+                    Logger::log("Can load LRCPLive plugin");
+                } else {
+                    $this->maniaControl->getChat()->sendErrorToAdmins('Please activate first the LocalRecords plugin');
+                }
 
-			foreach ($players as $player) {
-				$this->initTimes($player);
-			}
+                if ($this->DedimaniaPlugin) {
+                    $this->dediactive = true;
+                    Logger::log("Can load LRCPLive Dedimania plugin");
+                } else {
+                    $this->maniaControl->getChat()->sendErrorToAdmins('Please activate first the Dedimania plugin');
+                }
 
+                $players = $this->maniaControl->getPlayerManager()->getPlayers();
+
+                foreach ($players as $player) {
+                    $this->initTimes($player);
+                }
+
+            }else{
+                $this->notmuchplayers=false;
+            }
 			//            Logger::log("Init LRCPLive finished");
 		}, 500);
 
@@ -212,23 +221,35 @@ class LocalRecordsCPLivePlugin implements CallbackListener, TimerListener, Plugi
 
 	public function handle2Seconds()
 	{
-		if($this->active) {
-			$map = $this->maniaControl->getMapManager()->getCurrentMap();
-			$this->toprecord = $this->LocalRecordsPlugin->getLocalRecords($map, 1);
-		}
+        if($this->notmuchplayers) {
+            if($this->active) {
+                $map = $this->maniaControl->getMapManager()->getCurrentMap();
+                $this->toprecord = $this->LocalRecordsPlugin->getLocalRecords($map, 1);
+            }
+        }
 	}
 
 	public function handle60Seconds()
 	{
-		if($this->active) {
-			if($this->dediactive) {
-				//                Logger::log("Start get Dedimania Records");
-				$this->topdedimania = $this->DedimaniaPlugin->getDedimaniaRecords();
+        $numberplayers = $this->maniaControl->getPlayerManager()->getPlayerCount(false);
 
-				//                if (isset($this->topdedimania[0]))
-				//                    var_dump($this->topdedimania[0]->checkpoints);
-			}
-		}
+        if ($numberplayers < ($this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_LRCPLIVE_MAXNUMBERPLAYERS) +1)) {
+            $this->notmuchplayers=true;
+        }else{
+            $this->notmuchplayers=false;
+            $this->closeWidget(self::MLID_LRCPLIVE_WIDGET);
+        }
+        if($this->notmuchplayers) {
+            if ($this->active) {
+                if ($this->dediactive) {
+                    //                Logger::log("Start get Dedimania Records");
+                    $this->topdedimania = $this->DedimaniaPlugin->getDedimaniaRecords();
+
+                    //                if (isset($this->topdedimania[0]))
+                    //                    var_dump($this->topdedimania[0]->checkpoints);
+                }
+            }
+        }
 	}
 
 	/**
@@ -238,9 +259,11 @@ class LocalRecordsCPLivePlugin implements CallbackListener, TimerListener, Plugi
 	 */
 	public function handlePlayerConnect(Player $player)
 	{
-		if($this->active){
-			$this->initTimes($player);
-		}
+        if($this->notmuchplayers) {
+            if($this->active){
+                $this->initTimes($player);
+            }
+        }
 	}
 
 	public function handlePlayerDisconnect(Player $player)
@@ -259,25 +282,27 @@ class LocalRecordsCPLivePlugin implements CallbackListener, TimerListener, Plugi
 
 	public function handleBeginMapCallback()
 	{
-		if($this->active) {
-			$this->playersrecords = array();
-			$this->toprecord = array();
-			$players = $this->maniaControl->getPlayerManager()->getPlayers();
-			foreach ($players as $player) {
-				$this->initTimes($player);
-			}
+        if($this->notmuchplayers) {
+            if($this->active) {
+                $this->playersrecords = array();
+                $this->toprecord = array();
+                $players = $this->maniaControl->getPlayerManager()->getPlayers();
+                foreach ($players as $player) {
+                    $this->initTimes($player);
+                }
 
-			if($this->dediactive) {
-				//                Logger::log("Start get Dedimania Records");
-				$this->topdedimania = $this->DedimaniaPlugin->getDedimaniaRecords();
+                if($this->dediactive) {
+                    //                Logger::log("Start get Dedimania Records");
+                    $this->topdedimania = $this->DedimaniaPlugin->getDedimaniaRecords();
 
-				//                if (isset($this->topdedimania[0]))
-				//                    var_dump($this->topdedimania[0]->checkpoints);
-			}
+                    //                if (isset($this->topdedimania[0]))
+                    //                    var_dump($this->topdedimania[0]->checkpoints);
+                }
 
-			$this->currentPlayerCps = array();
+                $this->currentPlayerCps = array();
 
-		}
+            }
+        }
 	}
 
 
@@ -294,17 +319,19 @@ class LocalRecordsCPLivePlugin implements CallbackListener, TimerListener, Plugi
 
 	public function handleFinishCallback(OnWayPointEventStructure $structure){
 
-		if($this->active){
-			$this->displayWidgets($structure, 1);
-			$player = $structure->getPlayer();
-			$this->maniaControl->getTimerManager()->registerOneTimeListening($this, function () use (&$player) {
-				$this->initTimes($player);
-			}, 1000);
-			if(array_key_exists($structure->getPlayer()->login, $this->currentPlayerCps)) {
-				unset($this->currentPlayerCps[$structure->getPlayer()->login]);
-			}
-			$this->currentPlayerCps[$structure->getPlayer()->login] = $structure->getPlainJsonObject()->curlapcheckpoints;
-		}
+        if($this->notmuchplayers) {
+            if($this->active){
+                $this->displayWidgets($structure, 1);
+                $player = $structure->getPlayer();
+                $this->maniaControl->getTimerManager()->registerOneTimeListening($this, function () use (&$player) {
+                    $this->initTimes($player);
+                }, 1000);
+                if(array_key_exists($structure->getPlayer()->login, $this->currentPlayerCps)) {
+                    unset($this->currentPlayerCps[$structure->getPlayer()->login]);
+                }
+                $this->currentPlayerCps[$structure->getPlayer()->login] = $structure->getPlainJsonObject()->curlapcheckpoints;
+            }
+        }
 
 	}
 
@@ -315,11 +342,13 @@ class LocalRecordsCPLivePlugin implements CallbackListener, TimerListener, Plugi
 
 		// Display Local Records Checkpoints Live Widget
 
-		if($this->active){
-			if ($this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_LRCPLIVE_ACTIVATED)) {
-				$this->displayLRCPLiveWidget($structure, $finish);
-			}
-		}
+        if($this->notmuchplayers) {
+            if($this->active){
+                if ($this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_LRCPLIVE_ACTIVATED)) {
+                    $this->displayLRCPLiveWidget($structure, $finish);
+                }
+            }
+        }
 
 
 	}
@@ -748,10 +777,12 @@ class LocalRecordsCPLivePlugin implements CallbackListener, TimerListener, Plugi
 	public function handleCheckpointCallback(OnWayPointEventStructure $structure){
 
 		//        Logger::log("CP Start");
-		if($this->active){
-			//            Logger::log("CP Start");
-			$this->displayWidgets($structure);
-		}
+        if($this->notmuchplayers) {
+            if($this->active){
+                //            Logger::log("CP Start");
+                $this->displayWidgets($structure);
+            }
+        }
 	}
 
 	/**
