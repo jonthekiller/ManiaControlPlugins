@@ -38,7 +38,7 @@ class MatchWidgetPlugin implements ManialinkPageAnswerListener, CallbackListener
      * Constants
      */
     const PLUGIN_ID = 127;
-    const PLUGIN_VERSION = 0.45;
+    const PLUGIN_VERSION = 0.46;
     const PLUGIN_NAME = 'MatchWidgetPlugin';
     const PLUGIN_AUTHOR = 'jonthekiller';
 
@@ -50,7 +50,7 @@ class MatchWidgetPlugin implements ManialinkPageAnswerListener, CallbackListener
     const SETTING_MATCHWIDGET_LIVE_POSY = 'MatchWidgetPlugin-Widget-Position: Y';
     const SETTING_MATCHWIDGET_LIVE_LINESCOUNT = 'Widget Displayed Lines Count';
     const SETTING_MATCHWIDGET_LIVE_WIDTH = 'MatchWidgetPlugin-Widget-Size: Width';
-    const SETTING_MATCHWIDGET_LIVE_HEIGHT = 'MatchWidgetPlugin-Widget-Size: Height';
+//    const SETTING_MATCHWIDGET_LIVE_HEIGHT = 'MatchWidgetPlugin-Widget-Size: Height';
     const SETTING_MATCHWIDGET_LIVE_LINE_HEIGHT = 'MatchWidgetPlugin-Widget-Lines: Height';
     const DEFAULT_MATCH_PLUGIN = 'Drakonia\MatchPlugin';
     const SETTINGS_MATCHWIDGET_MOVE_RACE_RANKING = 'Race Ranking Default Position';
@@ -178,7 +178,7 @@ class MatchWidgetPlugin implements ManialinkPageAnswerListener, CallbackListener
         $this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_MATCHWIDGET_LIVE_POSY, 40);
         $this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_MATCHWIDGET_LIVE_LINESCOUNT, 4);
         $this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_MATCHWIDGET_LIVE_WIDTH, 42);
-        $this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_MATCHWIDGET_LIVE_HEIGHT, 25);
+//        $this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_MATCHWIDGET_LIVE_HEIGHT, 25);
         $this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_MATCHWIDGET_LIVE_LINE_HEIGHT, 4);
         $this->maniaControl->getSettingManager()->initSetting($this, self::SETTINGS_MATCHWIDGET_MOVE_RACE_RANKING_X, 100);
         $this->maniaControl->getSettingManager()->initSetting($this, self::SETTINGS_MATCHWIDGET_MOVE_RACE_RANKING_Y, 50);
@@ -237,10 +237,10 @@ class MatchWidgetPlugin implements ManialinkPageAnswerListener, CallbackListener
         $width = $this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_MATCHWIDGET_LIVE_WIDTH);
         $lineHeight = $this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_MATCHWIDGET_LIVE_LINE_HEIGHT);
         $lines = $this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_MATCHWIDGET_LIVE_LINESCOUNT);
-        $height = $this->maniaControl->getSettingManager()->getSettingValue(
-            $this,
-            self::SETTING_MATCHWIDGET_LIVE_HEIGHT
-        );
+//        $height = $this->maniaControl->getSettingManager()->getSettingValue(
+//            $this,
+//            self::SETTING_MATCHWIDGET_LIVE_HEIGHT
+//        );
         $height = 7. + $lines * $lineHeight;
         $labelStyle = $this->maniaControl->getManialinkManager()->getStyleManager()->getDefaultLabelStyle();
         $quadSubstyle = $this->maniaControl->getManialinkManager()->getStyleManager()->getDefaultQuadSubstyle();

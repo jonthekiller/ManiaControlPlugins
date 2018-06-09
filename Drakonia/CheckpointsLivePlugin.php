@@ -36,7 +36,7 @@ class CheckpointsLivePlugin implements ManialinkPageAnswerListener, CallbackList
 	 * Constants
 	 */
 	const PLUGIN_ID      = 111;
-	const PLUGIN_VERSION = 0.24;
+	const PLUGIN_VERSION = 0.3;
 	const PLUGIN_NAME    = 'CheckpointsLivePlugin';
 	const PLUGIN_AUTHOR  = 'jonthekiller';
 
@@ -48,7 +48,7 @@ class CheckpointsLivePlugin implements ManialinkPageAnswerListener, CallbackList
 	const SETTING_CHECKPOINTS_LIVE_POSY      = 'CheckpointsLive-Widget-Position: Y';
     const SETTING_CHECKPOINTS_LIVE_LINESCOUNT    = 'Widget Displayed Lines Count';
     const SETTING_CHECKPOINTS_LIVE_WIDTH     = 'CheckpointsLive-Widget-Size: Width';
-    const SETTING_CHECKPOINTS_LIVE_HEIGHT    = 'CheckpointsLive-Widget-Size: Height';
+//    const SETTING_CHECKPOINTS_LIVE_HEIGHT    = 'CheckpointsLive-Widget-Size: Height';
     const SETTING_CHECKPOINTS_LIVE_LINE_HEIGHT    = 'CheckpointsLive-Widget-Lines: Height';
 
     const ACTION_SPEC = 'Spec.Action';
@@ -133,17 +133,17 @@ class CheckpointsLivePlugin implements ManialinkPageAnswerListener, CallbackList
 
 //        $callback = $this->maniaControl->getModeScriptEventManager()->getListOfDisabledCallbacks();
 //        var_dump($callback);
-        $this->maniaControl->getModeScriptEventManager()->blockCallback("Trackmania.Event.WayPoint");
+        //$this->maniaControl->getModeScriptEventManager()->blockCallback("Trackmania.Event.WayPoint");
 //        $callback = $this->maniaControl->getModeScriptEventManager()->getListOfDisabledCallbacks();
 //        var_dump($callback);
 
         // Settings
 		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_CHECKPOINTS_LIVE_ACTIVATED, true);
-		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_CHECKPOINTS_LIVE_POSX, 139);
+		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_CHECKPOINTS_LIVE_POSX, -139);
 		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_CHECKPOINTS_LIVE_POSY, 40);
-		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_CHECKPOINTS_LIVE_LINESCOUNT, 8);
+		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_CHECKPOINTS_LIVE_LINESCOUNT, 4);
         $this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_CHECKPOINTS_LIVE_WIDTH, 42);
-        $this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_CHECKPOINTS_LIVE_HEIGHT, 40);
+//        $this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_CHECKPOINTS_LIVE_HEIGHT, 40);
         $this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_CHECKPOINTS_LIVE_LINE_HEIGHT, 4);
 
         $script = $this->maniaControl->getClient()->getScriptName();
@@ -185,34 +185,41 @@ class CheckpointsLivePlugin implements ManialinkPageAnswerListener, CallbackList
 		$posX         = $this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_CHECKPOINTS_LIVE_POSX);
 		$posY         = $this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_CHECKPOINTS_LIVE_POSY);
         $width        = $this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_CHECKPOINTS_LIVE_WIDTH);
-        $height       = $this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_CHECKPOINTS_LIVE_HEIGHT);
+        $lines       = $this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_CHECKPOINTS_LIVE_LINESCOUNT);
+        $lineHeight   = $this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_CHECKPOINTS_LIVE_LINE_HEIGHT);
+//        $height       = $this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_CHECKPOINTS_LIVE_HEIGHT);
+        $height = 7. + $lines * $lineHeight;
+
         $labelStyle         = $this->maniaControl->getManialinkManager()->getStyleManager()->getDefaultLabelStyle();
 		$quadSubstyle = $this->maniaControl->getManialinkManager()->getStyleManager()->getDefaultQuadSubstyle();
         $quadStyle    = $this->maniaControl->getManialinkManager()->getStyleManager()->getDefaultQuadStyle();
 
-		$maniaLink = new ManiaLink(self::MLID_CHECKPOINTS_LIVE_WIDGET);
+
 
 		// mainframe
 		$frame = new Frame();
-		$maniaLink->addChild($frame);
-		$frame->setSize($width, $height);
+//		$maniaLink->addChild($frame);
+//		$frame->setSize($width, $height);
 		$frame->setPosition($posX, $posY);
 
 		// Background Quad
 		$backgroundQuad = new Quad();
 		$frame->addChild($backgroundQuad);
+        $backgroundQuad->setVerticalAlign($backgroundQuad::TOP);
 		$backgroundQuad->setSize($width, $height);
 		$backgroundQuad->setStyles($quadStyle, $quadSubstyle);
 
         $titleLabel = new Label();
         $frame->addChild($titleLabel);
-        $titleLabel->setPosition(0, 17);
+        $titleLabel->setPosition(0, $lineHeight * -0.9);
         $titleLabel->setWidth($width);
         $titleLabel->setStyle($labelStyle);
         $titleLabel->setTextSize(2);
         $titleLabel->setText("CP Live");
         $titleLabel->setTranslate(true);
 
+        $maniaLink = new ManiaLink(self::MLID_CHECKPOINTS_LIVE_WIDGET);
+        $maniaLink->addChild($frame);
 		// Send manialink
 		$this->maniaControl->getManialinkManager()->sendManialink($maniaLink, $login);
 	}
@@ -315,11 +322,11 @@ class CheckpointsLivePlugin implements ManialinkPageAnswerListener, CallbackList
             }
             $player = $this->maniaControl->getPlayerManager()->getPlayer($record['login']);
 
-            $y = -1. - $index * $lineHeight;
+            $y = -10 - ($index) * $lineHeight;
 
             $recordFrame = new Frame();
             $frame->addChild($recordFrame);
-            $recordFrame->setPosition(0, $y+13);
+            $recordFrame->setPosition(0, $y + $lineHeight / 2);
 
             //Rank
             $rankLabel = new Label();
