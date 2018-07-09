@@ -30,7 +30,7 @@ class ModerationSyncPlugin implements CallbackListener, TimerListener, Plugin
 * Constants
 */
     const PLUGIN_ID = 130;
-    const PLUGIN_VERSION = 0.2;
+    const PLUGIN_VERSION = 0.21;
     const PLUGIN_NAME = 'ModerationSyncPlugin';
     const PLUGIN_AUTHOR = 'jonthekiller';
 
@@ -106,7 +106,7 @@ class ModerationSyncPlugin implements CallbackListener, TimerListener, Plugin
         );
         $this->maniaControl->getCallbackManager()->registerCallbackListener(SettingManager::CB_SETTING_CHANGED, $this, 'updateSettings');
 
-        //$this->maniaControl->getTimerManager()->registerTimerListening($this, 'handle60Seconds', 60000);
+        $this->maniaControl->getTimerManager()->registerTimerListening($this, 'handle60Seconds', 60000);
 
         $this->initTables();
         $this->init();
@@ -235,9 +235,10 @@ class ModerationSyncPlugin implements CallbackListener, TimerListener, Plugin
 
         foreach ($ignorelist as $ignoreplayer) {
 
-            $player = $this->maniaControl->getPlayerManager()->getPlayer($ignoreplayer);
+            if($ignoreplayer != "") {
+                $player = $this->maniaControl->getPlayerManager()->getPlayer($ignoreplayer);
 
-            $query = "INSERT INTO `drakonia_ignorelist` (
+                $query = "INSERT INTO `drakonia_ignorelist` (
 				`playerIndex`,
 				`ignored`
 				) VALUES (
@@ -245,12 +246,12 @@ class ModerationSyncPlugin implements CallbackListener, TimerListener, Plugin
 				1) ON DUPLICATE KEY UPDATE
 				`ignored` = VALUES(`ignored`);";
 //            Logger::log($query);
-            $mysqli->query($query);
-            if ($mysqli->error) {
-                trigger_error($mysqli->error);
-                return null;
+                $mysqli->query($query);
+                if ($mysqli->error) {
+                    trigger_error($mysqli->error);
+                    return null;
+                }
             }
-
         }
 
         // Unignore players
@@ -348,9 +349,10 @@ class ModerationSyncPlugin implements CallbackListener, TimerListener, Plugin
 
         foreach ($banlist as $banplayer) {
 
-            $player = $this->maniaControl->getPlayerManager()->getPlayer($banplayer);
+            if($banplayer != "") {
+                $player = $this->maniaControl->getPlayerManager()->getPlayer($banplayer);
 
-            $query = "INSERT INTO `drakonia_banlist` (
+                $query = "INSERT INTO `drakonia_banlist` (
 				`playerIndex`,
 				`banned`
 				) VALUES (
@@ -358,12 +360,12 @@ class ModerationSyncPlugin implements CallbackListener, TimerListener, Plugin
 				1) ON DUPLICATE KEY UPDATE
 				`banned` = VALUES(`banned`);";
 //            Logger::log($query);
-            $mysqli->query($query);
-            if ($mysqli->error) {
-                trigger_error($mysqli->error);
-                return null;
+                $mysqli->query($query);
+                if ($mysqli->error) {
+                    trigger_error($mysqli->error);
+                    return null;
+                }
             }
-
         }
 
         // Unban players
