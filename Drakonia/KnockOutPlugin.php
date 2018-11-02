@@ -32,12 +32,13 @@ class KnockOutPlugin implements ManialinkPageAnswerListener, CallbackListener, C
 {
 
     const PLUGIN_ID = 125;
-    const PLUGIN_VERSION = 0.3;
+    const PLUGIN_VERSION = 0.32;
     const PLUGIN_NAME = 'KnockOutPlugin';
     const PLUGIN_AUTHOR = 'jonthekiller';
 
 
     const SETTING_KNOCKOUT_ACTIVATED = 'KnockOut Plugin Activated:';
+    const SETTING_KNOCKOUT_WIDGET_ACTIVATED = 'KnockOut Plugin Widget Activated:';
     const SETTING_KNOCKOUT_AUTHLEVEL = 'Auth level for the ko* commands:';
     const SETTING_KNOCKOUT_ROUNDSPERMAP = 'S_RoundsPerMap';
     const SETTING_KNOCKOUT_DURATIONWARMUP = 'S_WarmUpDuration';
@@ -137,6 +138,7 @@ class KnockOutPlugin implements ManialinkPageAnswerListener, CallbackListener, C
 
         //Settings
         $this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_KNOCKOUT_ACTIVATED, true);
+        $this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_KNOCKOUT_WIDGET_ACTIVATED, true);
 
         $this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_KNOCKOUT_ALLOWREPASWN, true);
         $this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_KNOCKOUT_DURATIONWARMUP, 10);
@@ -341,6 +343,13 @@ class KnockOutPlugin implements ManialinkPageAnswerListener, CallbackListener, C
 
     public function KOStart()
     {
+
+        $this->maniaControl->getTimerManager()->registerOneTimeListening(
+            $this,
+            function () use (&$player) {
+
+                try
+                {
         $this->maniaControl->getChat()->sendChat("$0f0KO match start!");
         Logger::log("KO match start!");
 
@@ -362,7 +371,10 @@ class KnockOutPlugin implements ManialinkPageAnswerListener, CallbackListener, C
         $maplist = $this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_KNOCKOUT_MAPLIST);
         $maplist = 'MatchSettings' . DIRECTORY_SEPARATOR . $maplist;
 
+
         $this->maniaControl->getClient()->loadMatchSettings($maplist);
+
+
         $this->maniaControl->getMapManager()->restructureMapList();
 
         $shufflemaplist = (boolean)$this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_KNOCKOUT_SHUFFLEMAPS);
@@ -404,14 +416,15 @@ class KnockOutPlugin implements ManialinkPageAnswerListener, CallbackListener, C
 
         $this->moveRaceRanking();
 
-        $this->maniaControl->getTimerManager()->registerOneTimeListening(
-            $this,
-            function () use (&$player) {
-//                Logger::log("Skip map");
-                $this->maniaControl->getMapManager()->getMapActions()->skipMap();
+        $this->maniaControl->getMapManager()->getMapActions()->skipMap();
+
+                } catch (Exception $e) {
+                    $this->maniaControl->getChat()->sendError("Can not start KO: ".$e->getMessage());
+                }
             },
             2000
         );
+
 
     }
 
@@ -611,8 +624,8 @@ class KnockOutPlugin implements ManialinkPageAnswerListener, CallbackListener, C
         if ($this->koStarted) {
             if ($this->maniaControl->getSettingManager()->getSettingValue(
                     $this,
-                    self::SETTING_KNOCKOUT_NBLIFES
-                ) > 1) {
+                    self::SETTING_KNOCKOUT_WIDGET_ACTIVATED
+                )) {
                 $this->displayKnockoutWidget();
             }
         }
