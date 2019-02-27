@@ -43,7 +43,7 @@ class MatchPlugin implements ManialinkPageAnswerListener, CallbackListener, Comm
 {
 
     const PLUGIN_ID = 119;
-    const PLUGIN_VERSION = 0.73;
+    const PLUGIN_VERSION = 0.75;
     const PLUGIN_NAME = 'MatchPlugin';
     const PLUGIN_AUTHOR = 'jonthekiller';
 
@@ -308,6 +308,13 @@ class MatchPlugin implements ManialinkPageAnswerListener, CallbackListener, Comm
             'onCommandMatchEndRound',
             true,
             'Force end a round during a match'
+        );
+        $this->maniaControl->getCommandManager()->registerCommandListener(
+            'matchendwu',
+            $this,
+            'onCommandMatchEndWU',
+            true,
+            'Force end a WU during a match'
         );
         $this->maniaControl->getCommandManager()->registerCommandListener(
             'matchrecover',
@@ -840,7 +847,18 @@ class MatchPlugin implements ManialinkPageAnswerListener, CallbackListener, Comm
 
                     if ($this->livePlugin) {
 //                Logger::log("Call MatchStart Live");
+                        if ($this->maniaControl->getSettingManager()->getSettingValue(
+                                $this,
+                                self::SETTING_MATCH_MATCH_MODE
+                            ) == "Cup"
+                         OR $this->maniaControl->getSettingManager()->getSettingValue(
+                                $this,
+                                self::SETTING_MATCH_MATCH_MODE
+                            ) == "Rounds"
+                        )
+                        {
                         $this->livePlugin->MatchUpdateMatchPoints();
+                        }
                     }
 
                 } catch (Exception $e) {
@@ -1165,6 +1183,12 @@ class MatchPlugin implements ManialinkPageAnswerListener, CallbackListener, Comm
     public function onCommandMatchEndRound()
     {
         $this->maniaControl->getModeScriptEventManager()->forceTrackmaniaRoundEnd();
+
+    }
+
+    public function onCommandMatchEndWU()
+    {
+        $this->triggerModeScriptEvent('Trackmania.WarmUp.ForceStop');
 
     }
 
