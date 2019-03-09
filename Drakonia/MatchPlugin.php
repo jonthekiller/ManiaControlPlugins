@@ -43,7 +43,7 @@ class MatchPlugin implements ManialinkPageAnswerListener, CallbackListener, Comm
 {
 
     const PLUGIN_ID = 119;
-    const PLUGIN_VERSION = 0.75;
+    const PLUGIN_VERSION = 0.76;
     const PLUGIN_NAME = 'MatchPlugin';
     const PLUGIN_AUTHOR = 'jonthekiller';
 
@@ -604,10 +604,12 @@ class MatchPlugin implements ManialinkPageAnswerListener, CallbackListener, Comm
                             $temppointlimit = $this->livePlugin->getPointLimit();
                             $tempnbwinners = $this->livePlugin->getNbWinners();
                             if ($tempnbwinners > 0) {
+                                Logger::log("Override the default number of winners: " . $tempnbwinners);
                                 $nbwinners = $tempnbwinners;
                             }
 
                             if ($temppointlimit > 0) {
+                                Logger::log("Override the default number of points: " . $temppointlimit);
                                 $pointlimit = $temppointlimit;
                             }
                         }
@@ -2493,7 +2495,11 @@ class MatchPlugin implements ManialinkPageAnswerListener, CallbackListener, Comm
                     );
                     try {
                         $this->maniaControl->getClient()->setModeScriptSettings($loadedSettings);
+                        Logger::log("Parameters updated");
+                        $this->maniaControl->getChat()->sendSuccessToAdmins("Parameters updated");
                     } catch (InvalidArgumentException $e) {
+                        Logger::log("Parameters not updated");
+                        $this->maniaControl->getChat()->sendErrorToAdmins("Parameters not updated");
                     }
                 } elseif ($this->maniaControl->getSettingManager()->getSettingValue(
                         $this,
@@ -2508,7 +2514,11 @@ class MatchPlugin implements ManialinkPageAnswerListener, CallbackListener, Comm
                     );
                     try {
                         $this->maniaControl->getClient()->setModeScriptSettings($loadedSettings);
+                        Logger::log("Parameters updated");
+                        $this->maniaControl->getChat()->sendSuccessToAdmins("Parameters updated");
                     } catch (InvalidArgumentException $e) {
+                        Logger::log("Parameters not updated");
+                        $this->maniaControl->getChat()->sendErrorToAdmins("Parameters not updated");
                     }
 
                 } elseif ($this->maniaControl->getSettingManager()->getSettingValue(
@@ -2522,7 +2532,11 @@ class MatchPlugin implements ManialinkPageAnswerListener, CallbackListener, Comm
                     );
                     try {
                         $this->maniaControl->getClient()->setModeScriptSettings($loadedSettings);
+                        Logger::log("Parameters updated");
+                        $this->maniaControl->getChat()->sendSuccessToAdmins("Parameters updated");
                     } catch (InvalidArgumentException $e) {
+                        Logger::log("Parameters not updated");
+                        $this->maniaControl->getChat()->sendErrorToAdmins("Parameters not updated");
                     }
                 }
             }
