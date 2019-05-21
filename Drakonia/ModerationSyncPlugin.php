@@ -42,12 +42,15 @@ class ModerationSyncPlugin implements CallbackListener, TimerListener, CommandLi
 * Constants
 */
     const PLUGIN_ID = 130;
-    const PLUGIN_VERSION = 0.6;
+    const PLUGIN_VERSION = 0.73;
     const PLUGIN_NAME = 'ModerationSyncPlugin';
     const PLUGIN_AUTHOR = 'jonthekiller';
 
     const SETTING_MODERATIONSYNC_ACTIVATED = 'ModerationSyncPlugin Activated';
     const SETTING_MODO_AUTHLEVEL = 'Auth level for the modo* commands:';
+    const SETTING_MODERATION_CHAT = 'Moderate the chat:';
+    const SETTING_AUTORELOAD_GUESTLIST = 'Auto-reload guestlist:';
+    const SETTING_AUTORELOAD_BLACKLIST = 'Auto-reload blacklist:';
     const SHOWN_MAIN_WINDOW = -1;
     const MAX_PLAYERS_PER_PAGE = 15;
     const MAX_PAGES_PER_CHUNK = 2;
@@ -143,14 +146,16 @@ class ModerationSyncPlugin implements CallbackListener, TimerListener, CommandLi
         $this->maniaControl->getCallbackManager()->registerCallbackListener(SettingManager::CB_SETTING_CHANGED, $this, 'updateSettings');
 
         $this->maniaControl->getTimerManager()->registerTimerListening($this, 'handle60Seconds', 60000);
+        $this->maniaControl->getTimerManager()->registerTimerListening($this, 'handle60Minutes', 3600000);
+
+
+        $this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_MODERATION_CHAT, false);
+        $this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_AUTORELOAD_GUESTLIST, true);
+        $this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_AUTORELOAD_BLACKLIST, true);
 
         $this->initTables();
         $this->init();
 
-        try {
-            $this->maniaControl->getClient()->chatEnableManualRouting(true, true);
-        } catch (InvalidArgumentException $e) {
-        }
 
 
         $this->maniaControl->getCommandManager()->registerCommandListener(
@@ -247,6 +252,25 @@ class ModerationSyncPlugin implements CallbackListener, TimerListener, CommandLi
     private function init()
     {
 
+        if ($this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_MODERATION_CHAT)) {
+            try {
+                $this->maniaControl->getClient()->chatEnableManualRouting(true, true);
+            } catch (InvalidArgumentException $e) {
+            }
+        }else{
+            try {
+                $this->maniaControl->getClient()->chatEnableManualRouting(false);
+            } catch (InvalidArgumentException $e) {
+            }
+        }
+
+//        if ($this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_AUTORELOAD_GUESTLIST)) {
+//            $this->loadGuestlist('guestlist.txt');
+//        }
+//
+//        if ($this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_AUTORELOAD_BLACKLIST)) {
+//            $this->loadBlacklist('blacklist.txt');
+//        }
     }
 
     public function handle60Seconds()
@@ -257,38 +281,53 @@ class ModerationSyncPlugin implements CallbackListener, TimerListener, CommandLi
 
     }
 
+    public function handle60Minutes()
+    {
+
+        if ($this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_AUTORELOAD_GUESTLIST)) {
+            $this->loadGuestlist('guestlist.txt');
+        }
+
+        if ($this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_AUTORELOAD_BLACKLIST)) {
+            $this->loadBlacklist('blacklist.txt');
+        }
+
+    }
 
     public function handlePlayerChat($callback)
     {
-        $args = $callback[1];
-        $player = $this->maniaControl->getPlayerManager()->getPlayer($args[1]);
 
-        if (substr($args[2], 0, 1) != '/') {
-            if ($args[0] != 0) {
-                try {
+            $args = $callback[1];
+            $player = $this->maniaControl->getPlayerManager()->getPlayer($args[1]);
+
+            if (substr($args[2], 0, 1) != '/') {
+                if ($args[0] != 0) {
+                    try {
+                        if ($this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_MODERATION_CHAT)) {
 //                    $this->maniaControl->getClient()->chatForward('$z' . $args[2] . '$z', $args[1]);
-                    $this->maniaControl->getClient()->chatSendServerMessage('$z[' . $player->getEscapedNickname() . '$z] ' . $args[2] . '$z');
+                            $this->maniaControl->getClient()->chatSendServerMessage('$z[' . $player->getEscapedNickname() . '$z] ' . $args[2] . '$z');
+                        }
+                        // Keep the 15 latest players writing in the chat
+                        if (count($this->playerslist) == 0) {
+                            $this->playerslist = array($args[1]);
+                        } else {
+//                        print_r($this->playerslist);
+                            $this->playerslist = array_reverse($this->playerslist);
+                            $this->playerslist[] = $args[1];
 
-                    // Keep the 15 latest players writing in the chat
-                    if (count($this->playerslist) == 0) {
-                        $this->playerslist = array($args[1]);
-                    } else {
+                            $this->playerslist = array_reverse($this->playerslist);
 //                        print_r($this->playerslist);
-                        $this->playerslist = array_reverse($this->playerslist);
-                        $this->playerslist[] = $args[1];
+                            $this->playerslist = array_unique($this->playerslist);
+//                        print_r($this->playerslist);
+                            $this->playerslist = array_slice($this->playerslist, 0, 15);
+                        }
 
-                        $this->playerslist = array_reverse($this->playerslist);
-//                        print_r($this->playerslist);
-                        $this->playerslist = array_unique($this->playerslist);
-//                        print_r($this->playerslist);
-                        $this->playerslist = array_slice($this->playerslist, 0, 15);
+
+                    } catch (InvalidArgumentException $e) {
                     }
-
-
-                } catch (InvalidArgumentException $e) {
                 }
             }
-        }
+
 
     }
 
