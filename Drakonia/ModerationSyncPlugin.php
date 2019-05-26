@@ -42,7 +42,7 @@ class ModerationSyncPlugin implements CallbackListener, TimerListener, CommandLi
 * Constants
 */
     const PLUGIN_ID = 130;
-    const PLUGIN_VERSION = 0.73;
+    const PLUGIN_VERSION = 0.8;
     const PLUGIN_NAME = 'ModerationSyncPlugin';
     const PLUGIN_AUTHOR = 'jonthekiller';
 
@@ -50,7 +50,9 @@ class ModerationSyncPlugin implements CallbackListener, TimerListener, CommandLi
     const SETTING_MODO_AUTHLEVEL = 'Auth level for the modo* commands:';
     const SETTING_MODERATION_CHAT = 'Moderate the chat:';
     const SETTING_AUTORELOAD_GUESTLIST = 'Auto-reload guestlist:';
+    const SETTING_AUTORELOAD_GUESTLIST_FILENAME = 'Guestlist filename:';
     const SETTING_AUTORELOAD_BLACKLIST = 'Auto-reload blacklist:';
+    const SETTING_AUTORELOAD_BLACKLIST_FILENAME = 'Blacklist filename:';
     const SHOWN_MAIN_WINDOW = -1;
     const MAX_PLAYERS_PER_PAGE = 15;
     const MAX_PAGES_PER_CHUNK = 2;
@@ -151,7 +153,9 @@ class ModerationSyncPlugin implements CallbackListener, TimerListener, CommandLi
 
         $this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_MODERATION_CHAT, false);
         $this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_AUTORELOAD_GUESTLIST, true);
+        $this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_AUTORELOAD_GUESTLIST_FILENAME, 'guestlist.txt');
         $this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_AUTORELOAD_BLACKLIST, true);
+        $this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_AUTORELOAD_BLACKLIST_FILENAME, 'blacklist.txt');
 
         $this->initTables();
         $this->init();
@@ -285,11 +289,11 @@ class ModerationSyncPlugin implements CallbackListener, TimerListener, CommandLi
     {
 
         if ($this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_AUTORELOAD_GUESTLIST)) {
-            $this->loadGuestlist('guestlist.txt');
+            $this->loadGuestlist($this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_AUTORELOAD_GUESTLIST_FILENAME));
         }
 
         if ($this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_AUTORELOAD_BLACKLIST)) {
-            $this->loadBlacklist('blacklist.txt');
+            $this->loadBlacklist($this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_AUTORELOAD_BLACKLIST_FILENAME));
         }
 
     }
@@ -1205,7 +1209,8 @@ class ModerationSyncPlugin implements CallbackListener, TimerListener, CommandLi
         if (file_exists($configfolder . $filename)) {
             try {
                 $this->maniaControl->getClient()->loadGuestList($filename);
-                $this->maniaControl->getChat()->sendSuccessToAdmins("Successfully loaded guestlist file: " . $filename);
+                Logger::log("Successfully loaded guestlist file: " . $filename);
+//                $this->maniaControl->getChat()->sendSuccessToAdmins("Successfully loaded guestlist file: " . $filename);
             } catch (InvalidArgumentException $e) {
                 $this->maniaControl->getChat()->sendErrorToAdmins("Error while loading guestlist file: " . $filename);
             }
@@ -1221,7 +1226,8 @@ class ModerationSyncPlugin implements CallbackListener, TimerListener, CommandLi
         if (file_exists($configfolder . $filename)) {
             try {
                 $this->maniaControl->getClient()->loadBlackList($filename);
-                $this->maniaControl->getChat()->sendSuccessToAdmins("Successfully loaded blacklist file: " . $filename);
+                Logger::log("Successfully loaded blacklist file: " . $filename);
+//                $this->maniaControl->getChat()->sendSuccessToAdmins("Successfully loaded blacklist file: " . $filename);
             } catch (InvalidArgumentException $e) {
                 $this->maniaControl->getChat()->sendErrorToAdmins("Error while loading blacklist file: " . $filename);
             }

@@ -5,6 +5,7 @@ namespace Drakonia;
 use FML\Controls\Frame;
 use FML\Controls\Label;
 use FML\Controls\Quad;
+use FML\Controls\Quads\Quad_Bgs1;
 use FML\Controls\Quads\Quad_Bgs1InRace;
 use FML\ManiaLink;
 use ManiaControl\Callbacks\CallbackListener;
@@ -36,7 +37,7 @@ class CheckpointsLivePlugin implements ManialinkPageAnswerListener, CallbackList
 	 * Constants
 	 */
 	const PLUGIN_ID      = 111;
-	const PLUGIN_VERSION = 0.3;
+	const PLUGIN_VERSION = 0.91;
 	const PLUGIN_NAME    = 'CheckpointsLivePlugin';
 	const PLUGIN_AUTHOR  = 'jonthekiller';
 
@@ -50,6 +51,11 @@ class CheckpointsLivePlugin implements ManialinkPageAnswerListener, CallbackList
     const SETTING_CHECKPOINTS_LIVE_WIDTH     = 'CheckpointsLive-Widget-Size: Width';
 //    const SETTING_CHECKPOINTS_LIVE_HEIGHT    = 'CheckpointsLive-Widget-Size: Height';
     const SETTING_CHECKPOINTS_LIVE_LINE_HEIGHT    = 'CheckpointsLive-Widget-Lines: Height';
+    const SETTING_CHECKPOINTS_LIVE_CHANGE_POSITION = 'Change position shown';
+
+
+    const SETTINGS_MATCHWIDGET_HIDE_SPEC = 'Hide Spec Icon';
+    const SETTINGS_MATCHWIDGET_HIDE_RACE_RANKING = 'Hide Race Ranking';
 
     const ACTION_SPEC = 'Spec.Action';
 
@@ -62,7 +68,7 @@ class CheckpointsLivePlugin implements ManialinkPageAnswerListener, CallbackList
 	// $ranking = array ($playerlogin, $nbCPs, $CPTime)
 	private $ranking = array();
 	// Gamemodes supported by the plugin
-	private $gamemodes = array("Cup.Script.txt", "Rounds.Script.txt", "Team.Script.txt");
+	private $gamemodes = array("Cup.Script.txt", "Rounds.Script.txt", "Team.Script.txt", "Laps.Script.txt", "Champion.Script.txt");
 	private $script = array();
 	private $active = false;
 
@@ -104,7 +110,7 @@ class CheckpointsLivePlugin implements ManialinkPageAnswerListener, CallbackList
  * @see \ManiaControl\Plugins\Plugin::getDescription()
  */
 	public static function getDescription() {
-		return 'Display a widget to show the Checkpoints Live information for Rounds/Team/Cup mode';
+		return 'Display a widget to show the Checkpoints Live information for Rounds/Team/Cup/Laps/Champion mode';
 	}
 
 	/**
@@ -119,6 +125,7 @@ class CheckpointsLivePlugin implements ManialinkPageAnswerListener, CallbackList
 		$this->maniaControl->getCallbackManager()->registerCallbackListener(PlayerManager::CB_PLAYERDISCONNECT, $this, 'handlePlayerDisconnect');
 		$this->maniaControl->getCallbackManager()->registerCallbackListener(SettingManager::CB_SETTING_CHANGED, $this, 'updateSettings');
         $this->maniaControl->getCallbackManager()->registerCallbackListener(Callbacks::TM_ONWAYPOINT, $this, 'handleCheckpointCallback');
+        $this->maniaControl->getCallbackManager()->registerCallbackListener(Callbacks::TM_ONLAPFINISH, $this, 'handleCheckpointCallback');
         $this->maniaControl->getCallbackManager()->registerCallbackListener(Callbacks::TM_ONFINISHLINE, $this, 'handleFinishCallback');
         $this->maniaControl->getCallbackManager()->registerCallbackListener(Callbacks::TM_SCORES, $this, 'handleEndRoundCallback');
         $this->maniaControl->getCallbackManager()->registerCallbackListener(Callbacks::MP_STARTROUNDSTART, $this, 'handleBeginRoundCallback');
@@ -146,6 +153,10 @@ class CheckpointsLivePlugin implements ManialinkPageAnswerListener, CallbackList
 //        $this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_CHECKPOINTS_LIVE_HEIGHT, 40);
         $this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_CHECKPOINTS_LIVE_LINE_HEIGHT, 4);
 
+        $this->maniaControl->getSettingManager()->initSetting($this, self::SETTINGS_MATCHWIDGET_HIDE_RACE_RANKING, true);
+        $this->maniaControl->getSettingManager()->initSetting($this, self::SETTINGS_MATCHWIDGET_HIDE_SPEC, true);
+        $this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_CHECKPOINTS_LIVE_CHANGE_POSITION, false);
+
         $script = $this->maniaControl->getClient()->getScriptName();
         $this->script = $script['CurrentValue'];
         if(in_array($this->script, $this->gamemodes )){
@@ -156,7 +167,12 @@ class CheckpointsLivePlugin implements ManialinkPageAnswerListener, CallbackList
 
         $this->displayWidgets();
 
-		return true;
+        $this->hideRaceRanking();
+
+        $this->hideSpecIcon();
+
+
+        return true;
 	}
 
 	/**
@@ -206,13 +222,27 @@ class CheckpointsLivePlugin implements ManialinkPageAnswerListener, CallbackList
 		$backgroundQuad = new Quad();
 		$frame->addChild($backgroundQuad);
         $backgroundQuad->setVerticalAlign($backgroundQuad::TOP);
-		$backgroundQuad->setSize($width, $height);
+        if ($this->maniaControl->getSettingManager()->getSettingValue(
+            $this,
+            self::SETTING_CHECKPOINTS_LIVE_CHANGE_POSITION
+        )) {
+            $backgroundQuad->setSize(($width + 5), $height);
+        }else{
+            $backgroundQuad->setSize($width, $height);
+        }
 		$backgroundQuad->setStyles($quadStyle, $quadSubstyle);
 
         $titleLabel = new Label();
         $frame->addChild($titleLabel);
         $titleLabel->setPosition(0, $lineHeight * -0.9);
-        $titleLabel->setWidth($width);
+        if ($this->maniaControl->getSettingManager()->getSettingValue(
+            $this,
+            self::SETTING_CHECKPOINTS_LIVE_CHANGE_POSITION
+        )) {
+            $titleLabel->setWidth(($width + 2.5));
+        }else{
+            $titleLabel->setWidth($width);
+        }
         $titleLabel->setStyle($labelStyle);
         $titleLabel->setTextSize(2);
         $titleLabel->setText("CP Live");
@@ -289,9 +319,11 @@ class CheckpointsLivePlugin implements ManialinkPageAnswerListener, CallbackList
         // Obtain a list of columns
         $nbCPs = array();
         $CPTime = array();
+        $previousPlace = array();
         foreach ($ranking as $key => $row) {
             $nbCPs[$key]  = $row['nbCPs'];
             $CPTime[$key] = $row['CPTime'];
+            $previousPlace[$key] = $row['previousPlace'];
         }
 
         // Sort the data with nbCPs descending, CPTime ascending
@@ -306,7 +338,13 @@ class CheckpointsLivePlugin implements ManialinkPageAnswerListener, CallbackList
                 break;
             }
 
-            $time = Formatter::formatTime($record['CPTime']);
+            // If Laps, show number of CPs
+            if ($this->script == "Laps.Script.txt" || $this->script == "Champion.Script.txt")
+            {
+                $time = Formatter::formatTime($record['CPTime']) . " / " .($record['nbCPs'] + 1) . " CPs";
+            }else{
+                $time = Formatter::formatTime($record['CPTime']);
+            }
 
             if($rank == 1 && $record['CPTime'] != 999999999){
                 $bestNbCPs = $record['nbCPs'];
@@ -357,6 +395,7 @@ class CheckpointsLivePlugin implements ManialinkPageAnswerListener, CallbackList
             $timeLabel->setSize($width * 0.25, $lineHeight);
             $timeLabel->setTextSize(1);
             $timeLabel->setText($time);
+
             $timeLabel->setTextEmboss(true);
 
             //Quad with Spec action
@@ -366,6 +405,25 @@ class CheckpointsLivePlugin implements ManialinkPageAnswerListener, CallbackList
             $quad->setSize($width, $lineHeight);
             $quad->setAction(self::ACTION_SPEC . '.' . $player->login);
 
+            if ($this->maniaControl->getSettingManager()->getSettingValue(
+                $this,
+                self::SETTING_CHECKPOINTS_LIVE_CHANGE_POSITION
+            )) {
+                //Quad for change place (green if better, red if worse)
+                $quad = new Quad();
+                $recordFrame->addChild($quad);
+                if ($rank < $record['previousPlace']) {
+//                $quad->setStyles(Quad_Bgs1InRace::STYLE, Quad_Bgs1::SUBSTYLE_BgTitle3_4);
+                    $quad->setBackgroundColor('0f0');
+                } elseif ($rank > $record['previousPlace']) {
+//                $quad->setStyles(Quad_Bgs1::STYLE, Quad_Bgs1::SUBSTYLE_BgTitle3_4);
+                    $quad->setBackgroundColor('f00');
+                } else {
+//                $quad->setStyles(Quad_Bgs1::STYLE, Quad_Bgs1::SUBSTYLE_BgTitleShadow);
+                }
+                $quad->setSize(2, $lineHeight);
+                $quad->setX($width * 0.525);
+            }
             $rank ++;
 
         }
@@ -383,6 +441,10 @@ class CheckpointsLivePlugin implements ManialinkPageAnswerListener, CallbackList
 
         }else{
             $this->displayWidgets();
+            $this->hideRaceRanking();
+
+            $this->hideSpecIcon();
+
             //$this->updateWidget($this->ranking);
         }
 	}
@@ -411,31 +473,110 @@ class CheckpointsLivePlugin implements ManialinkPageAnswerListener, CallbackList
     }
 
     public function PlayerGiveUpRanking(BasePlayerTimeStructure $structure){
+        // At least one player pass a Checkpoint
         if ($this->ranking) {
-            // At least one player pass a Checkpoint
+
+            $previousRank = $this->ranking;
+            // Obtain a list of columns
+            $nbCPs = array();
+            $CPTime = array();
+            $previousPlace = array();
+            foreach ($previousRank as $key => $row) {
+                $nbCPs[$key]  = $row['nbCPs'];
+                $CPTime[$key] = $row['CPTime'];
+                $previousPlace[$key] = $row['previousPlace'];
+                $currentPlace[$key] = $row['currentPlace'];
+            }
+            // Sort the data with nbCPs descending, CPTime ascending
+            array_multisort($nbCPs, SORT_DESC, $CPTime, SORT_ASC, $previousRank);
+
+            $nbrank = 1;
+            $prevRank = array();
+            foreach ($previousRank as $index => $record) {
+                $prevRank[$record['login']] = $nbrank;
+                $nbrank ++;
+            }
+            $rank = $nbrank;
+
             $rankexist = $this->recursive_array_search($structure->getLogin(), $this->ranking);
+
+            $nbrank = 1;
+            $prevRank = array();
+            $currRank = array();
+            $ranking = array();
+            // Reset the ladder
+//            unset($this->ranking);
+
+            foreach ($previousRank as $index => $record) {
+                $prevRank[$record['login']] = $nbrank;
+                $currRank[$record['login']] = $record['currentPlace'];
+//                $prevCPTime[$record['login']] = $record['CPTime'];
+//                $prevnbCPs[$record['login']] = $record['nbCPs'];
+
+                $ranking[] = array("login" => $record['login'], "nbCPs" => $record['nbCPs'], "CPTime" => $record['CPTime'], "previousPlace" => $nbrank, "currentPlace" => $record['currentPlace']);
+                $nbrank ++;
+            }
 
             if ($rankexist) {
                 // At least 2nd checkpoint for the player
-
+                $currentRank = 255;
                 // Remove old record
                 foreach ($this->ranking as $key => $val) {
 
+
                     if ($val['login'] == $structure->getLogin()) {
                         unset($this->ranking[$key]);
+//                        $rank = $prevRank[$structure->getLogin()];
+                        $currentRank = $currRank[$structure->getLogin()];
+                    }
+                }
 
+                foreach ($ranking as $key => $val) {
+
+                    if ($val['login'] == $structure->getLogin()) {
+                        $rank = $val['previousPlace'];
                     }
                 }
                 // Add new one
-                $this->ranking[] = array("login" => $structure->getLogin(), "nbCPs" => 0, "CPTime" => 999999999);
+                $this->ranking[] = array("login" => $structure->getLogin(), "nbCPs" => 0, "CPTime" => 999999999, "previousPlace" => $rank, "currentPlace" => $currentRank);
             } else {
                 // First checkpoint for the player
-                $this->ranking[] = array("login" => $structure->getLogin(), "nbCPs" => 0, "CPTime" => 999999999);
+                $this->ranking[] = array("login" => $structure->getLogin(), "nbCPs" => 0, "CPTime" => 999999999, "previousPlace" => $rank, "currentPlace" => $rank);
+            }
+
+            $nbrank = 1;
+            $prevRank = array();
+
+            $previousRank = $this->ranking;
+//            var_dump($this->ranking);
+            // Obtain a list of columns
+            $nbCPs = array();
+            $CPTime = array();
+            $previousPlace = array();
+            foreach ($previousRank as $key => $row) {
+                $nbCPs[$key]  = $row['nbCPs'];
+                $CPTime[$key] = $row['CPTime'];
+                $previousPlace[$key] = $row['previousPlace'];
+                $currentPlace[$key] = $row['currentPlace'];
+            }
+            // Sort the data with nbCPs descending, CPTime ascending
+            array_multisort($nbCPs, SORT_DESC, $CPTime, SORT_ASC, $previousRank);
+
+            // Reset the ladder
+            unset($this->ranking);
+
+            foreach ($previousRank as $index => $record) {
+//                $prevRank[$record['login']] = $nbrank;
+//                $prevCPTime[$record['login']] = $record['CPTime'];
+//                $prevnbCPs[$record['login']] = $record['nbCPs'];
+
+                $this->ranking[] = array("login" => $record['login'], "nbCPs" => $record['nbCPs'], "CPTime" => $record['CPTime'], "previousPlace" => $record['previousPlace'], "currentPlace" => $nbrank);
+                $nbrank ++;
             }
         } else {
             //If first player arrives on first Checkpoint
 
-            $this->ranking[] = array("login" => $structure->getLogin(), "nbCPs" => 0, "CPTime" => 999999999);
+            $this->ranking[] = array("login" => $structure->getLogin(), "nbCPs" => 0, "CPTime" => 999999999, "previousPlace" => 1, "currentPlace" => 1);
         }
     }
 
@@ -463,37 +604,117 @@ class CheckpointsLivePlugin implements ManialinkPageAnswerListener, CallbackList
     }
 
     public function updateRanking(OnWayPointEventStructure $structure){
+
+        // At least one player pass a Checkpoint
         if ($this->ranking) {
-            // At least one player pass a Checkpoint
+
+            $previousRank = $this->ranking;
+            // Obtain a list of columns
+            $nbCPs = array();
+            $CPTime = array();
+            $previousPlace = array();
+            $currentPlace = array();
+            foreach ($previousRank as $key => $row) {
+                $nbCPs[$key]  = $row['nbCPs'];
+                $CPTime[$key] = $row['CPTime'];
+                $previousPlace[$key] = $row['previousPlace'];
+                $currentPlace[$key] = $row['currentPlace'];
+            }
+            // Sort the data with nbCPs descending, CPTime ascending
+            array_multisort($nbCPs, SORT_DESC, $CPTime, SORT_ASC, $previousRank);
+
+            $nbrank = 1;
+            $prevRank = array();
+            $currRank = array();
+
+            $ranking = array();
+            // Reset the ladder
+//            unset($this->ranking);
+
+            foreach ($previousRank as $index => $record) {
+                $prevRank[$record['login']] = $nbrank;
+                $currRank[$record['login']] = $record['currentPlace'];
+//                $prevCPTime[$record['login']] = $record['CPTime'];
+//                $prevnbCPs[$record['login']] = $record['nbCPs'];
+
+                $ranking[] = array("login" => $record['login'], "nbCPs" => $record['nbCPs'], "CPTime" => $record['CPTime'], "previousPlace" => $nbrank, "currentPlace" => $record['currentPlace']);
+                $nbrank ++;
+            }
             $rankexist = $this->recursive_array_search($structure->getLogin(), $this->ranking);
 
+            $rank = $nbrank;
+            $currentRank = $nbrank;
+//            Logger::log($structure->getLogin() . " " .$structure->getCheckPointInRace());
             if ($rankexist) {
                 // At least 2nd checkpoint for the player
+
 
                 // Remove old record
                 foreach ($this->ranking as $key => $val) {
 
                     if ($val['login'] == $structure->getLogin()) {
                         unset($this->ranking[$key]);
-
+//                        $rank = $prevRank[$structure->getLogin()];
+                        $currentRank = $currRank[$structure->getLogin()];
                     }
                 }
+
+                foreach ($ranking as $key => $val) {
+
+                    if ($val['login'] == $structure->getLogin()) {
+                        $rank = $val['previousPlace'];
+                    }
+                }
+
                 // Add new one
-                $this->ranking[] = array("login" => $structure->getLogin(), "nbCPs" => $structure->getCheckPointInRace(), "CPTime" => $structure->getRaceTime());
+                $this->ranking[] = array("login" => $structure->getLogin(), "nbCPs" => $structure->getCheckPointInRace(), "CPTime" => $structure->getRaceTime(), "previousPlace" => $rank, "currentPlace" => $currentRank);
             } else {
                 // First checkpoint for the player
-                $this->ranking[] = array("login" => $structure->getLogin(), "nbCPs" => $structure->getCheckPointInRace(), "CPTime" => $structure->getRaceTime());
+                $this->ranking[] = array("login" => $structure->getLogin(), "nbCPs" => $structure->getCheckPointInRace(), "CPTime" => $structure->getRaceTime(), "previousPlace" => $rank, "currentPlace" => $rank);
+            }
+
+            $nbrank = 1;
+            $prevRank = array();
+
+            $previousRank = $this->ranking;
+//            var_dump($this->ranking);
+            // Obtain a list of columns
+            $nbCPs = array();
+            $CPTime = array();
+            $previousPlace = array();
+            foreach ($previousRank as $key => $row) {
+                $nbCPs[$key]  = $row['nbCPs'];
+                $CPTime[$key] = $row['CPTime'];
+                $previousPlace[$key] = $row['previousPlace'];
+                $currentPlace[$key] = $row['currentPlace'];
+            }
+            // Sort the data with nbCPs descending, CPTime ascending
+            array_multisort($nbCPs, SORT_DESC, $CPTime, SORT_ASC, $previousRank);
+
+            // Reset the ladder
+            unset($this->ranking);
+
+            foreach ($previousRank as $index => $record) {
+//                $prevRank[$record['login']] = $nbrank;
+//                $prevCPTime[$record['login']] = $record['CPTime'];
+//                $prevnbCPs[$record['login']] = $record['nbCPs'];
+
+                $this->ranking[] = array("login" => $record['login'], "nbCPs" => $record['nbCPs'], "CPTime" => $record['CPTime'], "previousPlace" => $record['previousPlace'], "currentPlace" => $nbrank);
+                $nbrank ++;
             }
         } else {
             //If first player arrives on first Checkpoint
-
-            $this->ranking[] = array("login" => $structure->getLogin(), "nbCPs" => $structure->getCheckPointInRace(), "CPTime" => $structure->getRaceTime());
+//            Logger::log($structure->getLogin() . " " .$structure->getCheckPointInRace());
+            $this->ranking[] = array("login" => $structure->getLogin(), "nbCPs" => $structure->getCheckPointInRace(), "CPTime" => $structure->getRaceTime(), "previousPlace" => 1, "currentPlace" => 1);
         }
+
+
+//        var_dump($this->ranking);
     }
 
     public function handleCheckpointCallback(OnWayPointEventStructure $structure){
 
-        Logger::log("CP");
+//        Logger::log("CP");
         if($this->active){
             $this->updateRanking($structure);
         }
@@ -610,6 +831,51 @@ class CheckpointsLivePlugin implements ManialinkPageAnswerListener, CallbackList
         }
 
     }
+
+    public function hideRaceRanking()
+    {
+        if ($this->maniaControl->getSettingManager()->getSettingValue(
+            $this,
+            self::SETTINGS_MATCHWIDGET_HIDE_RACE_RANKING
+        )) {
+            $properties = "<ui_properties>
+    <round_scores visible='false' />
+    <chat_avatar visible='false' />
+  </ui_properties>";
+            Logger::log('Hide Race Ranking Widget');
+            $this->maniaControl->getModeScriptEventManager()->setTrackmaniaUIProperties($properties);
+
+        } else {
+            $properties = "<ui_properties>
+    <round_scores pos='-158.5 40. 150.' visible='true' />
+    <chat_avatar visible='true' />
+  </ui_properties>";
+            Logger::log('Show Race Ranking Widget');
+            $this->maniaControl->getModeScriptEventManager()->setTrackmaniaUIProperties($properties);
+
+        }
+    }
+
+    public function hideSpecIcon()
+    {
+        if ($this->maniaControl->getSettingManager()->getSettingValue(
+            $this,
+            self::SETTINGS_MATCHWIDGET_HIDE_SPEC
+        )) {
+            $properties = "<ui_properties><viewers_count visible='false'/></ui_properties>";
+
+            Logger::log('Hide Spec Icon');
+            $this->maniaControl->getModeScriptEventManager()->setTrackmaniaUIProperties($properties);
+
+        } else {
+            $properties = "<ui_properties>
+    <viewers_count visible='true' pos='157. -40. 5.\' />
+  </ui_properties>";
+            Logger::log('Show Spec Icon');
+            $this->maniaControl->getModeScriptEventManager()->setTrackmaniaUIProperties($properties);
+
+        }
+    }
 	/**
 	 * Update Widgets on Setting Changes
 	 *
@@ -618,7 +884,11 @@ class CheckpointsLivePlugin implements ManialinkPageAnswerListener, CallbackList
 	public function updateSettings(Setting $setting) {
 		if ($setting->belongsToClass($this)) {
 			$this->displayWidgets();
-		}
+            $this->hideRaceRanking();
+
+            $this->hideSpecIcon();
+
+        }
 	}
 
 
