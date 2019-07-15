@@ -26,7 +26,7 @@ use ManiaControl\Utils\Formatter;
 
 
 /**
- * Checkpoints Live Plugin
+ * Match Live Plugin
  *
  * @author    jonthekiller
  * @copyright 2017 Drakonia Team
@@ -38,7 +38,7 @@ class MatchWidgetPlugin implements ManialinkPageAnswerListener, CallbackListener
      * Constants
      */
     const PLUGIN_ID = 127;
-    const PLUGIN_VERSION = 0.46;
+    const PLUGIN_VERSION = 0.5;
     const PLUGIN_NAME = 'MatchWidgetPlugin';
     const PLUGIN_AUTHOR = 'jonthekiller';
 
@@ -57,6 +57,8 @@ class MatchWidgetPlugin implements ManialinkPageAnswerListener, CallbackListener
     const SETTINGS_MATCHWIDGET_MOVE_RACE_RANKING_X = 'Race Ranking Position X';
     const SETTINGS_MATCHWIDGET_MOVE_RACE_RANKING_Y = 'Race Ranking Position Y';
     const SETTINGS_MATCHWIDGET_MOVE_RACE_RANKING_Z = 'Race Ranking Position Z';
+    const SETTING_MATCHWIDGET_SHOWPLAYERS      = 'Show for Players';
+    const SETTING_MATCHWIDGET_SHOWSPECTATORS     = 'Show for Spectators';
     const SETTINGS_MATCHWIDGET_HIDE_SPEC = 'Hide Spec Icon';
 
     const MATCH_ACTION_SPEC = 'Spec.Action';
@@ -172,8 +174,10 @@ class MatchWidgetPlugin implements ManialinkPageAnswerListener, CallbackListener
 
         // Settings
         $this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_MATCHWIDGET_LIVE_ACTIVATED, true);
-        $this->maniaControl->getSettingManager()->initSetting($this, self::SETTINGS_MATCHWIDGET_MOVE_RACE_RANKING, true);
+        $this->maniaControl->getSettingManager()->initSetting($this, self::SETTINGS_MATCHWIDGET_MOVE_RACE_RANKING, false);
         $this->maniaControl->getSettingManager()->initSetting($this, self::SETTINGS_MATCHWIDGET_HIDE_SPEC, true);
+        $this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_MATCHWIDGET_SHOWPLAYERS, true);
+        $this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_MATCHWIDGET_SHOWSPECTATORS, true);
         $this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_MATCHWIDGET_LIVE_POSX, -139);
         $this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_MATCHWIDGET_LIVE_POSY, 40);
         $this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_MATCHWIDGET_LIVE_LINESCOUNT, 4);
@@ -218,7 +222,29 @@ class MatchWidgetPlugin implements ManialinkPageAnswerListener, CallbackListener
                 $this,
                 self::SETTING_MATCHWIDGET_LIVE_ACTIVATED
             )) {
-                $this->displayMatchLiveWidget();
+                if ($this->maniaControl->getSettingManager()->getSettingValue(
+                    $this,
+                    self::SETTING_MATCHWIDGET_SHOWPLAYERS
+                )) {
+                    $players = $this->maniaControl->getPlayerManager()->getPlayers(true);
+                    $pl = array();
+                    foreach ($players as $player) {
+                        $pl = array_merge($pl, array($player->login));
+                    }
+                    $this->displayMatchLiveWidget($pl);
+                }
+                if ($this->maniaControl->getSettingManager()->getSettingValue(
+                    $this,
+                    self::SETTING_MATCHWIDGET_SHOWSPECTATORS
+                )) {
+
+                    $players = $this->maniaControl->getPlayerManager()->getSpectators();
+                    $pl = array();
+                    foreach ($players as $player) {
+                        $pl = array_merge($pl, array($player->login));
+                    }
+                    $this->displayMatchLiveWidget($pl);
+                }
             }
         }
 
@@ -300,9 +326,9 @@ class MatchWidgetPlugin implements ManialinkPageAnswerListener, CallbackListener
      *
      * @param string $widgetId
      */
-    public function closeWidget($widgetId)
+    public function closeWidget($widgetId, $login = null)
     {
-        $this->maniaControl->getManialinkManager()->hideManialink($widgetId);
+        $this->maniaControl->getManialinkManager()->hideManialink($widgetId,$login);
     }
 
 
@@ -581,6 +607,11 @@ class MatchWidgetPlugin implements ManialinkPageAnswerListener, CallbackListener
         }
     }
 
+    public function handlePlayerInfoChanged(Player $player) {
+        $this->closeWidget(self::MLID_MATCHWIDGET_LIVE_WIDGET, $player->login);
+        $this->closeWidget(self::MLID_MATCHWIDGET_LIVE_WIDGETTIMES, $player->login);
+
+    }
 
     /**
      * Update Widgets on Setting Changes

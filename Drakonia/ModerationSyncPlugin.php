@@ -42,7 +42,7 @@ class ModerationSyncPlugin implements CallbackListener, TimerListener, CommandLi
 * Constants
 */
     const PLUGIN_ID = 130;
-    const PLUGIN_VERSION = 0.8;
+    const PLUGIN_VERSION = 0.9;
     const PLUGIN_NAME = 'ModerationSyncPlugin';
     const PLUGIN_AUTHOR = 'jonthekiller';
 
@@ -161,6 +161,21 @@ class ModerationSyncPlugin implements CallbackListener, TimerListener, CommandLi
         $this->init();
 
 
+        $this->maniaControl->getCommandManager()->registerCommandListener(
+            'modoban',
+            $this,
+            'onCommandModoBan',
+            true,
+            'Ban an offline player'
+        );
+
+        $this->maniaControl->getCommandManager()->registerCommandListener(
+            'modomute',
+            $this,
+            'onCommandModoMute',
+            true,
+            'Mute an offline player'
+        );
 
         $this->maniaControl->getCommandManager()->registerCommandListener(
             'modobanlist',
@@ -261,7 +276,7 @@ class ModerationSyncPlugin implements CallbackListener, TimerListener, CommandLi
                 $this->maniaControl->getClient()->chatEnableManualRouting(true, true);
             } catch (InvalidArgumentException $e) {
             }
-        }else{
+        } else {
             try {
                 $this->maniaControl->getClient()->chatEnableManualRouting(false);
             } catch (InvalidArgumentException $e) {
@@ -301,36 +316,36 @@ class ModerationSyncPlugin implements CallbackListener, TimerListener, CommandLi
     public function handlePlayerChat($callback)
     {
 
-            $args = $callback[1];
-            $player = $this->maniaControl->getPlayerManager()->getPlayer($args[1]);
+        $args = $callback[1];
+        $player = $this->maniaControl->getPlayerManager()->getPlayer($args[1]);
 
-            if (substr($args[2], 0, 1) != '/') {
-                if ($args[0] != 0) {
-                    try {
-                        if ($this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_MODERATION_CHAT)) {
+        if (substr($args[2], 0, 1) != '/') {
+            if ($args[0] != 0) {
+                try {
+                    if ($this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_MODERATION_CHAT)) {
 //                    $this->maniaControl->getClient()->chatForward('$z' . $args[2] . '$z', $args[1]);
-                            $this->maniaControl->getClient()->chatSendServerMessage('$z[' . $player->getEscapedNickname() . '$z] ' . $args[2] . '$z');
-                        }
-                        // Keep the 15 latest players writing in the chat
-                        if (count($this->playerslist) == 0) {
-                            $this->playerslist = array($args[1]);
-                        } else {
-//                        print_r($this->playerslist);
-                            $this->playerslist = array_reverse($this->playerslist);
-                            $this->playerslist[] = $args[1];
-
-                            $this->playerslist = array_reverse($this->playerslist);
-//                        print_r($this->playerslist);
-                            $this->playerslist = array_unique($this->playerslist);
-//                        print_r($this->playerslist);
-                            $this->playerslist = array_slice($this->playerslist, 0, 15);
-                        }
-
-
-                    } catch (InvalidArgumentException $e) {
+                        $this->maniaControl->getClient()->chatSendServerMessage('$z[' . $player->getEscapedNickname() . '$z] ' . $args[2] . '$z');
                     }
+                    // Keep the 15 latest players writing in the chat
+                    if (count($this->playerslist) == 0) {
+                        $this->playerslist = array($args[1]);
+                    } else {
+//                        print_r($this->playerslist);
+                        $this->playerslist = array_reverse($this->playerslist);
+                        $this->playerslist[] = $args[1];
+
+                        $this->playerslist = array_reverse($this->playerslist);
+//                        print_r($this->playerslist);
+                        $this->playerslist = array_unique($this->playerslist);
+//                        print_r($this->playerslist);
+                        $this->playerslist = array_slice($this->playerslist, 0, 15);
+                    }
+
+
+                } catch (InvalidArgumentException $e) {
                 }
             }
+        }
 
 
     }
@@ -690,6 +705,71 @@ class ModerationSyncPlugin implements CallbackListener, TimerListener, CommandLi
             return;
         }
         $this->ModoPlayersList($player);
+    }
+
+
+
+    public function onCommandModoBan(array $chatCallback, Player $player)
+    {
+        $authLevel = $this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_MODO_AUTHLEVEL);
+        if (!$this->maniaControl->getAuthenticationManager()->checkRight($player, $authLevel)) {
+            $this->maniaControl->getAuthenticationManager()->sendNotAllowed($player);
+
+            return;
+        }
+        $text = (explode(" ", $chatCallback[1][2]));
+        $this->banPlayer($text[1]);
+    }
+
+    public function onCommandModoMute(array $chatCallback, Player $player)
+    {
+        $authLevel = $this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_MODO_AUTHLEVEL);
+        if (!$this->maniaControl->getAuthenticationManager()->checkRight($player, $authLevel)) {
+            $this->maniaControl->getAuthenticationManager()->sendNotAllowed($player);
+
+            return;
+        }
+        $text = (explode(" ", $chatCallback[1][2]));
+        $this->mutePlayer($text[1]);
+    }
+
+    public function banPlayer($playerlogin)
+    {
+        $player = $this->maniaControl->getPlayerManager()->getPlayer($playerlogin);
+        $mysqli = $this->maniaControl->getDatabase()->getMysqli();
+        $query = "INSERT INTO `drakonia_banlist` (
+				`playerIndex`,
+				`banned`
+				) VALUES (
+				{$player->index},
+				1) ON DUPLICATE KEY UPDATE
+				`banned` = VALUES(`banned`);";
+//            Logger::log($query);
+        $mysqli->query($query);
+        if ($mysqli->error) {
+            trigger_error($mysqli->error);
+            return null;
+        }
+    }
+
+
+    public function mutePlayer($playerlogin)
+    {
+        $player = $this->maniaControl->getPlayerManager()->getPlayer($playerlogin);
+        $mysqli = $this->maniaControl->getDatabase()->getMysqli();
+        $query = "INSERT INTO `drakonia_ignorelist` (
+				`playerIndex`,
+				`ignored`
+				) VALUES (
+				{$player->index},
+				1) ON DUPLICATE KEY UPDATE
+				`ignored` = VALUES(`ignored`);";
+//            Logger::log($query);
+        $mysqli->query($query);
+        if ($mysqli->error) {
+            trigger_error($mysqli->error);
+            return null;
+        }
     }
 
 
@@ -1115,9 +1195,9 @@ class ModerationSyncPlugin implements CallbackListener, TimerListener, CommandLi
     /**
      * Called on ManialinkPageAnswer
      *
-     * @internal
      * @param array $callback
      * @throws InvalidArgumentException
+     * @internal
      */
     public function handleManialinkPageAnswer(array $callback)
     {
@@ -1142,7 +1222,7 @@ class ModerationSyncPlugin implements CallbackListener, TimerListener, CommandLi
                 }
                 try {
                     $this->maniaControl->getClient()->unBan($player);
-                } catch (InvalidArgumentException $e) {
+                } catch (\Throwable $e) {
                 }
                 $this->maniaControl->getChat()->sendSuccessToAdmins("Player " . $player->getEscapedNickname() . " has been unbanned!");
                 break;
@@ -1156,18 +1236,35 @@ class ModerationSyncPlugin implements CallbackListener, TimerListener, CommandLi
                 }
                 try {
                     $this->maniaControl->getClient()->unIgnore($player);
-                } catch (InvalidArgumentException $e) {
+                } catch (\Throwable $e) {
                 }
                 $this->maniaControl->getChat()->sendSuccessToAdmins("Player " . $player->getEscapedNickname() . " has been unmuted!");
                 break;
             case self::ACTION_IGNORE:
-                if (!$player->isMuted()) {
-                    try {
-                        $this->maniaControl->getClient()->ignore($player);
-                        $this->maniaControl->getChat()->sendSuccessToAdmins("Player " . $player->getEscapedNickname() . " has been muted!");
-                    } catch (UnknownPlayerException $e) {
-                        return false;
-                    } catch (InvalidArgumentException $e) {
+                if ($player->isConnected) {
+                    if (!$player->isMuted()) {
+                        try {
+                            $this->maniaControl->getClient()->ignore($player);
+                            $this->maniaControl->getChat()->sendSuccessToAdmins("Player " . $player->getEscapedNickname() . " has been muted!");
+                        } catch (UnknownPlayerException $e) {
+                            return false;
+                        } catch (\Throwable $e) {
+                        }
+                    }
+                } else {
+                    $mysqli = $this->maniaControl->getDatabase()->getMysqli();
+                    $query = "INSERT INTO `drakonia_ignorelist` (
+				`playerIndex`,
+				`ignored`
+				) VALUES (
+				{$player->index},
+				1) ON DUPLICATE KEY UPDATE
+				`ignored` = VALUES(`ignored`);";
+//            Logger::log($query);
+                    $mysqli->query($query);
+                    if ($mysqli->error) {
+                        trigger_error($mysqli->error);
+                        return null;
                     }
                 }
                 break;
@@ -1179,7 +1276,7 @@ class ModerationSyncPlugin implements CallbackListener, TimerListener, CommandLi
 
                     } catch (UnknownPlayerException $e) {
                         return false;
-                    } catch (InvalidArgumentException $e) {
+                    } catch (\Throwable $e) {
                     }
                 } else {
                     $mysqli = $this->maniaControl->getDatabase()->getMysqli();

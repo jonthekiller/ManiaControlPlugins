@@ -32,7 +32,7 @@ class KnockOutPlugin implements ManialinkPageAnswerListener, CallbackListener, C
 {
 
     const PLUGIN_ID = 125;
-    const PLUGIN_VERSION = 0.32;
+    const PLUGIN_VERSION = 0.33;
     const PLUGIN_NAME = 'KnockOutPlugin';
     const PLUGIN_AUTHOR = 'jonthekiller';
 
@@ -510,7 +510,11 @@ class KnockOutPlugin implements ManialinkPageAnswerListener, CallbackListener, C
 
                         if ($roundpoints == 0) {
                             $nbplayersdel++;
-                            $this->playerslifes[$login]--;
+                            if ($this->playerslifes[$login]) {
+                                $this->playerslifes[$login]--;
+                            }else{
+                                $this->playerslifes[$login] = 0;
+                            }
 //                            if ($this->playerslifes[$login] > 0) {
 //                                $this->playerslifes[$login]--;
 //                            }

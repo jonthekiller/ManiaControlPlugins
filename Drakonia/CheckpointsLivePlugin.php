@@ -32,25 +32,26 @@ use ManiaControl\Utils\Formatter;
  * @copyright 2017 Drakonia Team
  * @license   http://www.gnu.org/licenses/ GNU General Public License, Version 3
  */
-class CheckpointsLivePlugin implements ManialinkPageAnswerListener, CallbackListener, TimerListener, Plugin {
-	/*
-	 * Constants
-	 */
-	const PLUGIN_ID      = 111;
-	const PLUGIN_VERSION = 0.91;
-	const PLUGIN_NAME    = 'CheckpointsLivePlugin';
-	const PLUGIN_AUTHOR  = 'jonthekiller';
+class CheckpointsLivePlugin implements ManialinkPageAnswerListener, CallbackListener, TimerListener, Plugin
+{
+    /*
+     * Constants
+     */
+    const PLUGIN_ID = 111;
+    const PLUGIN_VERSION = 0.92;
+    const PLUGIN_NAME = 'CheckpointsLivePlugin';
+    const PLUGIN_AUTHOR = 'jonthekiller';
 
-	// CheckpointsLiveWidget Properties
-	const MLID_CHECKPOINTS_LIVE_WIDGET              = 'CheckpointsLivePlugin.Widget';
-	const MLID_CHECKPOINTS_LIVE_WIDGETTIMES              = 'CheckpointsLivePlugin.WidgetTimes';
-	const SETTING_CHECKPOINTS_LIVE_ACTIVATED = 'CheckpointsLive-Widget Activated';
-	const SETTING_CHECKPOINTS_LIVE_POSX      = 'CheckpointsLive-Widget-Position: X';
-	const SETTING_CHECKPOINTS_LIVE_POSY      = 'CheckpointsLive-Widget-Position: Y';
-    const SETTING_CHECKPOINTS_LIVE_LINESCOUNT    = 'Widget Displayed Lines Count';
-    const SETTING_CHECKPOINTS_LIVE_WIDTH     = 'CheckpointsLive-Widget-Size: Width';
+    // CheckpointsLiveWidget Properties
+    const MLID_CHECKPOINTS_LIVE_WIDGET = 'CheckpointsLivePlugin.Widget';
+    const MLID_CHECKPOINTS_LIVE_WIDGETTIMES = 'CheckpointsLivePlugin.WidgetTimes';
+    const SETTING_CHECKPOINTS_LIVE_ACTIVATED = 'CheckpointsLive-Widget Activated';
+    const SETTING_CHECKPOINTS_LIVE_POSX = 'CheckpointsLive-Widget-Position: X';
+    const SETTING_CHECKPOINTS_LIVE_POSY = 'CheckpointsLive-Widget-Position: Y';
+    const SETTING_CHECKPOINTS_LIVE_LINESCOUNT = 'Widget Displayed Lines Count';
+    const SETTING_CHECKPOINTS_LIVE_WIDTH = 'CheckpointsLive-Widget-Size: Width';
 //    const SETTING_CHECKPOINTS_LIVE_HEIGHT    = 'CheckpointsLive-Widget-Size: Height';
-    const SETTING_CHECKPOINTS_LIVE_LINE_HEIGHT    = 'CheckpointsLive-Widget-Lines: Height';
+    const SETTING_CHECKPOINTS_LIVE_LINE_HEIGHT = 'CheckpointsLive-Widget-Lines: Height';
     const SETTING_CHECKPOINTS_LIVE_CHANGE_POSITION = 'Change position shown';
 
 
@@ -60,70 +61,79 @@ class CheckpointsLivePlugin implements ManialinkPageAnswerListener, CallbackList
     const ACTION_SPEC = 'Spec.Action';
 
 
-	/*
-	 * Private properties
-	 */
-	/** @var ManiaControl $maniaControl */
-	private $maniaControl         = null;
-	// $ranking = array ($playerlogin, $nbCPs, $CPTime)
-	private $ranking = array();
-	// Gamemodes supported by the plugin
-	private $gamemodes = array("Cup.Script.txt", "Rounds.Script.txt", "Team.Script.txt", "Laps.Script.txt", "Champion.Script.txt");
-	private $script = array();
-	private $active = false;
+    /*
+     * Private properties
+     */
+    /** @var ManiaControl $maniaControl */
+    private $maniaControl = null;
+    // $ranking = array ($playerlogin, $nbCPs, $CPTime)
+    private $ranking = array();
+    // Gamemodes supported by the plugin
+    private $gamemodes = array("Cup.Script.txt", "Rounds.Script.txt", "Team.Script.txt", "Laps.Script.txt", "Champion.Script.txt");
+    private $script = array();
+    private $active = false;
+    private $nbCPs = 0;
+    private $countCPs = 0;
 
-	/**
-	 * @see \ManiaControl\Plugins\Plugin::prepare()
-	 */
-	public static function prepare(ManiaControl $maniaControl) {
-	}
+    /**
+     * @see \ManiaControl\Plugins\Plugin::prepare()
+     */
+    public static function prepare(ManiaControl $maniaControl)
+    {
+    }
 
-	/**
-	 * @see \ManiaControl\Plugins\Plugin::getId()
-	 */
-	public static function getId() {
-		return self::PLUGIN_ID;
-	}
+    /**
+     * @see \ManiaControl\Plugins\Plugin::getId()
+     */
+    public static function getId()
+    {
+        return self::PLUGIN_ID;
+    }
 
-	/**
-	 * @see \ManiaControl\Plugins\Plugin::getName()
-	 */
-	public static function getName() {
-		return self::PLUGIN_NAME;
-	}
+    /**
+     * @see \ManiaControl\Plugins\Plugin::getName()
+     */
+    public static function getName()
+    {
+        return self::PLUGIN_NAME;
+    }
 
-	/**
-	 * @see \ManiaControl\Plugins\Plugin::getVersion()
-	 */
-	public static function getVersion() {
-		return self::PLUGIN_VERSION;
-	}
+    /**
+     * @see \ManiaControl\Plugins\Plugin::getVersion()
+     */
+    public static function getVersion()
+    {
+        return self::PLUGIN_VERSION;
+    }
 
-	/**
-	 * @see \ManiaControl\Plugins\Plugin::getAuthor()
-	 */
-	public static function getAuthor() {
-		return self::PLUGIN_AUTHOR;
-	}
+    /**
+     * @see \ManiaControl\Plugins\Plugin::getAuthor()
+     */
+    public static function getAuthor()
+    {
+        return self::PLUGIN_AUTHOR;
+    }
 
-	/**
- * @see \ManiaControl\Plugins\Plugin::getDescription()
- */
-	public static function getDescription() {
-		return 'Display a widget to show the Checkpoints Live information for Rounds/Team/Cup/Laps/Champion mode';
-	}
+    /**
+     * @see \ManiaControl\Plugins\Plugin::getDescription()
+     */
+    public static function getDescription()
+    {
+        return 'Display a widget to show the Checkpoints Live information for Rounds/Team/Cup/Laps/Champion mode';
+    }
 
-	/**
-	 * @see \ManiaControl\Plugins\Plugin::load()
-	 */
-	public function load(ManiaControl $maniaControl) {
-		$this->maniaControl = $maniaControl;
+    /**
+     * @see \ManiaControl\Plugins\Plugin::load()
+     */
+    public function load(ManiaControl $maniaControl)
+    {
+        $this->maniaControl = $maniaControl;
 
-		// Callbacks
-		$this->maniaControl->getCallbackManager()->registerCallbackListener(PlayerManager::CB_PLAYERCONNECT, $this, 'handlePlayerConnect');
+        // Callbacks
+        $this->maniaControl->getCallbackManager()->registerCallbackListener(PlayerManager::CB_PLAYERCONNECT, $this, 'handlePlayerConnect');
         $this->maniaControl->getCallbackManager()->registerCallbackListener(PlayerManager::CB_PLAYERINFOCHANGED, $this, 'handlePlayerInfoChanged');
-		$this->maniaControl->getCallbackManager()->registerCallbackListener(PlayerManager::CB_PLAYERDISCONNECT, $this, 'handlePlayerDisconnect');
-		$this->maniaControl->getCallbackManager()->registerCallbackListener(SettingManager::CB_SETTING_CHANGED, $this, 'updateSettings');
+        $this->maniaControl->getCallbackManager()->registerCallbackListener(PlayerManager::CB_PLAYERDISCONNECT, $this, 'handlePlayerDisconnect');
+        $this->maniaControl->getCallbackManager()->registerCallbackListener(SettingManager::CB_SETTING_CHANGED, $this, 'updateSettings');
         $this->maniaControl->getCallbackManager()->registerCallbackListener(Callbacks::TM_ONWAYPOINT, $this, 'handleCheckpointCallback');
         $this->maniaControl->getCallbackManager()->registerCallbackListener(Callbacks::TM_ONLAPFINISH, $this, 'handleCheckpointCallback');
         $this->maniaControl->getCallbackManager()->registerCallbackListener(Callbacks::TM_ONFINISHLINE, $this, 'handleFinishCallback');
@@ -145,92 +155,93 @@ class CheckpointsLivePlugin implements ManialinkPageAnswerListener, CallbackList
 //        var_dump($callback);
 
         // Settings
-		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_CHECKPOINTS_LIVE_ACTIVATED, true);
-		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_CHECKPOINTS_LIVE_POSX, -139);
-		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_CHECKPOINTS_LIVE_POSY, 40);
-		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_CHECKPOINTS_LIVE_LINESCOUNT, 4);
+        $this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_CHECKPOINTS_LIVE_ACTIVATED, true);
+        $this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_CHECKPOINTS_LIVE_POSX, -139);
+        $this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_CHECKPOINTS_LIVE_POSY, 40);
+        $this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_CHECKPOINTS_LIVE_LINESCOUNT, 4);
         $this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_CHECKPOINTS_LIVE_WIDTH, 42);
 //        $this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_CHECKPOINTS_LIVE_HEIGHT, 40);
         $this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_CHECKPOINTS_LIVE_LINE_HEIGHT, 4);
 
-        $this->maniaControl->getSettingManager()->initSetting($this, self::SETTINGS_MATCHWIDGET_HIDE_RACE_RANKING, true);
+//        $this->maniaControl->getSettingManager()->initSetting($this, self::SETTINGS_MATCHWIDGET_HIDE_RACE_RANKING, true);
         $this->maniaControl->getSettingManager()->initSetting($this, self::SETTINGS_MATCHWIDGET_HIDE_SPEC, true);
         $this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_CHECKPOINTS_LIVE_CHANGE_POSITION, false);
 
         $script = $this->maniaControl->getClient()->getScriptName();
         $this->script = $script['CurrentValue'];
-        if(in_array($this->script, $this->gamemodes )){
+        if (in_array($this->script, $this->gamemodes)) {
             $this->active = true;
-        }else{
+        } else {
             $this->active = false;
         }
 
         $this->displayWidgets();
 
-        $this->hideRaceRanking();
+//        $this->hideRaceRanking();
 
         $this->hideSpecIcon();
 
 
         return true;
-	}
+    }
 
-	/**
-	 * Display the Widget
-	 */
-	private function displayWidgets() {
+    /**
+     * Display the Widget
+     */
+    private function displayWidgets()
+    {
 
 
-		// Display Checkpoints Live Widget
+        // Display Checkpoints Live Widget
 
-        if($this->active){
+        if ($this->active) {
             if ($this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_CHECKPOINTS_LIVE_ACTIVATED)) {
                 $this->displayCheckpointsLiveWidget();
             }
-		}
+        }
 
 
-	}
+    }
 
-	/**
-	 * Displays the Checkpoints Live Widget
-	 *
-	 * @param bool $login
-	 */
-	public function displayCheckpointsLiveWidget($login = false) {
-		$posX         = $this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_CHECKPOINTS_LIVE_POSX);
-		$posY         = $this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_CHECKPOINTS_LIVE_POSY);
-        $width        = $this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_CHECKPOINTS_LIVE_WIDTH);
-        $lines       = $this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_CHECKPOINTS_LIVE_LINESCOUNT);
-        $lineHeight   = $this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_CHECKPOINTS_LIVE_LINE_HEIGHT);
+    /**
+     * Displays the Checkpoints Live Widget
+     *
+     * @param bool $login
+     */
+    public function displayCheckpointsLiveWidget($login = false)
+    {
+        $posX = $this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_CHECKPOINTS_LIVE_POSX);
+        $posY = $this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_CHECKPOINTS_LIVE_POSY);
+        $width = $this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_CHECKPOINTS_LIVE_WIDTH);
+        $lines = $this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_CHECKPOINTS_LIVE_LINESCOUNT);
+        $lineHeight = $this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_CHECKPOINTS_LIVE_LINE_HEIGHT);
 //        $height       = $this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_CHECKPOINTS_LIVE_HEIGHT);
         $height = 7. + $lines * $lineHeight;
 
-        $labelStyle         = $this->maniaControl->getManialinkManager()->getStyleManager()->getDefaultLabelStyle();
-		$quadSubstyle = $this->maniaControl->getManialinkManager()->getStyleManager()->getDefaultQuadSubstyle();
-        $quadStyle    = $this->maniaControl->getManialinkManager()->getStyleManager()->getDefaultQuadStyle();
+        $labelStyle = $this->maniaControl->getManialinkManager()->getStyleManager()->getDefaultLabelStyle();
+        $quadSubstyle = $this->maniaControl->getManialinkManager()->getStyleManager()->getDefaultQuadSubstyle();
+        $quadStyle = $this->maniaControl->getManialinkManager()->getStyleManager()->getDefaultQuadStyle();
 
 
-
-		// mainframe
-		$frame = new Frame();
+        // mainframe
+        $frame = new Frame();
 //		$maniaLink->addChild($frame);
 //		$frame->setSize($width, $height);
-		$frame->setPosition($posX, $posY);
+        $frame->setPosition($posX, $posY);
 
-		// Background Quad
-		$backgroundQuad = new Quad();
-		$frame->addChild($backgroundQuad);
+        // Background Quad
+        $backgroundQuad = new Quad();
+        $frame->addChild($backgroundQuad);
         $backgroundQuad->setVerticalAlign($backgroundQuad::TOP);
         if ($this->maniaControl->getSettingManager()->getSettingValue(
             $this,
             self::SETTING_CHECKPOINTS_LIVE_CHANGE_POSITION
         )) {
             $backgroundQuad->setSize(($width + 5), $height);
-        }else{
+        } else {
             $backgroundQuad->setSize($width, $height);
         }
-		$backgroundQuad->setStyles($quadStyle, $quadSubstyle);
+        $backgroundQuad->setStyles($quadStyle, $quadSubstyle);
 
         $titleLabel = new Label();
         $frame->addChild($titleLabel);
@@ -240,7 +251,7 @@ class CheckpointsLivePlugin implements ManialinkPageAnswerListener, CallbackList
             self::SETTING_CHECKPOINTS_LIVE_CHANGE_POSITION
         )) {
             $titleLabel->setWidth(($width + 2.5));
-        }else{
+        } else {
             $titleLabel->setWidth($width);
         }
         $titleLabel->setStyle($labelStyle);
@@ -250,9 +261,9 @@ class CheckpointsLivePlugin implements ManialinkPageAnswerListener, CallbackList
 
         $maniaLink = new ManiaLink(self::MLID_CHECKPOINTS_LIVE_WIDGET);
         $maniaLink->addChild($frame);
-		// Send manialink
-		$this->maniaControl->getManialinkManager()->sendManialink($maniaLink, $login);
-	}
+        // Send manialink
+        $this->maniaControl->getManialinkManager()->sendManialink($maniaLink, $login);
+    }
 
     /**
      * Handle ManiaControl After Init
@@ -261,57 +272,59 @@ class CheckpointsLivePlugin implements ManialinkPageAnswerListener, CallbackList
     {
         $script = $this->maniaControl->getClient()->getScriptName();
         $this->script = $script['CurrentValue'];
-        if(in_array($this->script, $this->gamemodes )){
+        if (in_array($this->script, $this->gamemodes)) {
             $this->active = true;
             $this->displayWidgets();
-        }else{
+        } else {
             $this->active = false;
             $this->closeWidget(self::MLID_CHECKPOINTS_LIVE_WIDGETTIMES);
             $this->closeWidget(self::MLID_CHECKPOINTS_LIVE_WIDGET);
         }
     }
 
-	/**
-	 * Close a Widget
-	 *
-	 * @param string $widgetId
-	 */
-	public function closeWidget($widgetId) {
-		$this->maniaControl->getManialinkManager()->hideManialink($widgetId);
-	}
+    /**
+     * Close a Widget
+     *
+     * @param string $widgetId
+     */
+    public function closeWidget($widgetId)
+    {
+        $this->maniaControl->getManialinkManager()->hideManialink($widgetId);
+    }
 
     /**
      * Handle ManiaControl After Init
      */
     public function handle1Second()
     {
-        if($this->active){
+        if ($this->active) {
             $this->updateWidget($this->ranking);
         }
     }
 
-    public function updateWidget($ranking){
+    public function updateWidget($ranking)
+    {
 
-        if($ranking)
-        {
+        if ($ranking) {
             $this->displayTimes($ranking);
-        }else{
+        } else {
             $this->closeWidget(self::MLID_CHECKPOINTS_LIVE_WIDGETTIMES);
         }
 
     }
 
-    public function displayTimes($ranking){
+    public function displayTimes($ranking)
+    {
 
-        $lines       = $this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_CHECKPOINTS_LIVE_LINESCOUNT);
-        $lineHeight   = $this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_CHECKPOINTS_LIVE_LINE_HEIGHT);
-        $posX         = $this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_CHECKPOINTS_LIVE_POSX);
-        $posY         = $this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_CHECKPOINTS_LIVE_POSY);
-        $width        = $this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_CHECKPOINTS_LIVE_WIDTH);
+        $lines = $this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_CHECKPOINTS_LIVE_LINESCOUNT);
+        $lineHeight = $this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_CHECKPOINTS_LIVE_LINE_HEIGHT);
+        $posX = $this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_CHECKPOINTS_LIVE_POSX);
+        $posY = $this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_CHECKPOINTS_LIVE_POSY);
+        $width = $this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_CHECKPOINTS_LIVE_WIDTH);
 
 
         $maniaLink = new ManiaLink(self::MLID_CHECKPOINTS_LIVE_WIDGETTIMES);
-        $frame     = new Frame();
+        $frame = new Frame();
         $maniaLink->addChild($frame);
         $frame->setPosition($posX, $posY);
 
@@ -321,7 +334,7 @@ class CheckpointsLivePlugin implements ManialinkPageAnswerListener, CallbackList
         $CPTime = array();
         $previousPlace = array();
         foreach ($ranking as $key => $row) {
-            $nbCPs[$key]  = $row['nbCPs'];
+            $nbCPs[$key] = $row['nbCPs'];
             $CPTime[$key] = $row['CPTime'];
             $previousPlace[$key] = $row['previousPlace'];
         }
@@ -339,23 +352,22 @@ class CheckpointsLivePlugin implements ManialinkPageAnswerListener, CallbackList
             }
 
             // If Laps, show number of CPs
-            if ($this->script == "Laps.Script.txt" || $this->script == "Champion.Script.txt")
-            {
-                $time = Formatter::formatTime($record['CPTime']) . " / " .($record['nbCPs'] + 1) . " CPs";
-            }else{
+            if ($this->script == "Laps.Script.txt" || $this->script == "Champion.Script.txt") {
+                $time = Formatter::formatTime($record['CPTime']) . " / " . ($record['nbCPs'] + 1) . " CPs";
+            } else {
                 $time = Formatter::formatTime($record['CPTime']);
             }
 
-            if($rank == 1 && $record['CPTime'] != 999999999){
+            if ($rank == 1 && $record['CPTime'] != 999999999) {
                 $bestNbCPs = $record['nbCPs'];
                 $bestCPTime = $record['CPTime'];
-            }else{
-                if($record['CPTime'] == 999999999) {
+            } else {
+                if ($record['CPTime'] == 999999999) {
                     $time = "DNF";
-                }elseif($bestNbCPs != $record['nbCPs']){
-                    $time = "+" . ($bestNbCPs - $record['nbCPs']). " CPs";
-                }else{
-                    $time = "+".Formatter::formatTime($record['CPTime'] - $bestCPTime);
+                } elseif ($bestNbCPs != $record['nbCPs']) {
+                    $time = "+" . ($bestNbCPs - $record['nbCPs']) . " CPs";
+                } else {
+                    $time = "+" . Formatter::formatTime($record['CPTime'] - $bestCPTime);
                 }
             }
             $player = $this->maniaControl->getPlayerManager()->getPlayer($record['login']);
@@ -424,69 +436,87 @@ class CheckpointsLivePlugin implements ManialinkPageAnswerListener, CallbackList
                 $quad->setSize(2, $lineHeight);
                 $quad->setX($width * 0.525);
             }
-            $rank ++;
+            $rank++;
 
         }
 
         $this->maniaControl->getManialinkManager()->sendManialink($maniaLink, false);
     }
 
-	public function handleBeginRoundCallback(){
+    public function handleBeginRoundCallback()
+    {
 
-	    $this->ranking = array();
+        $this->nbCPs = $this->maniaControl->getMapManager()->getCurrentMap()->nbCheckpoints;
+//        Logger::log($this->nbCPs);
+        $this->ranking = array();
+        $this->countCPs = 0;
         //$this->updateWidget($this->ranking);
-        if(!$this->active){
+        if (!$this->active) {
             $this->closeWidget(self::MLID_CHECKPOINTS_LIVE_WIDGETTIMES);
             $this->closeWidget(self::MLID_CHECKPOINTS_LIVE_WIDGET);
 
-        }else{
+        } else {
             $this->displayWidgets();
-            $this->hideRaceRanking();
+//            $this->hideRaceRanking();
 
             $this->hideSpecIcon();
 
             //$this->updateWidget($this->ranking);
         }
-	}
+    }
 
-	public function handleBeginWarmUpCallback(){
+    public function handleBeginWarmUpCallback()
+    {
 
-	    $this->ranking = array();
-        if(!$this->active){
+        $this->nbCPs = $this->maniaControl->getMapManager()->getCurrentMap()->nbCheckpoints;
+        $this->ranking = array();
+        if (!$this->active) {
             $this->closeWidget(self::MLID_CHECKPOINTS_LIVE_WIDGETTIMES);
             $this->closeWidget(self::MLID_CHECKPOINTS_LIVE_WIDGET);
 
-        }else{
+        } else {
             $this->displayWidgets();
         }
-	}
-
-    public function handleEndRoundCallback(){
-        $this->ranking = array();
     }
 
-    public function handlePlayerGiveUpCallback(BasePlayerTimeStructure $structure){
+    public function handleEndRoundCallback()
+    {
+        $this->ranking = array();
+        Logger::log("CPs cross during the round: " . $this->countCPs);
+        $this->countCPs = 0;
+    }
 
-        if($this->active){
+    public function handlePlayerGiveUpCallback(BasePlayerTimeStructure $structure)
+    {
+
+        if ($this->active) {
             $this->PlayerGiveUpRanking($structure);
         }
     }
 
-    public function PlayerGiveUpRanking(BasePlayerTimeStructure $structure){
+    public function PlayerGiveUpRanking(BasePlayerTimeStructure $structure)
+    {
         // At least one player pass a Checkpoint
         if ($this->ranking) {
 
+//            var_dump($this->ranking);
             $previousRank = $this->ranking;
             // Obtain a list of columns
+            $giveUp = 0;
             $nbCPs = array();
             $CPTime = array();
             $previousPlace = array();
             foreach ($previousRank as $key => $row) {
-                $nbCPs[$key]  = $row['nbCPs'];
+                $nbCPs[$key] = $row['nbCPs'];
                 $CPTime[$key] = $row['CPTime'];
                 $previousPlace[$key] = $row['previousPlace'];
                 $currentPlace[$key] = $row['currentPlace'];
+
+//                Logger::log($row['nbCPs']);
+
             }
+
+
             // Sort the data with nbCPs descending, CPTime ascending
             array_multisort($nbCPs, SORT_DESC, $CPTime, SORT_ASC, $previousRank);
 
@@ -494,7 +524,7 @@ class CheckpointsLivePlugin implements ManialinkPageAnswerListener, CallbackList
             $prevRank = array();
             foreach ($previousRank as $index => $record) {
                 $prevRank[$record['login']] = $nbrank;
-                $nbrank ++;
+                $nbrank++;
             }
             $rank = $nbrank;
 
@@ -514,7 +544,7 @@ class CheckpointsLivePlugin implements ManialinkPageAnswerListener, CallbackList
 //                $prevnbCPs[$record['login']] = $record['nbCPs'];
 
                 $ranking[] = array("login" => $record['login'], "nbCPs" => $record['nbCPs'], "CPTime" => $record['CPTime'], "previousPlace" => $nbrank, "currentPlace" => $record['currentPlace']);
-                $nbrank ++;
+                $nbrank++;
             }
 
             if ($rankexist) {
@@ -525,9 +555,18 @@ class CheckpointsLivePlugin implements ManialinkPageAnswerListener, CallbackList
 
 
                     if ($val['login'] == $structure->getLogin()) {
-                        unset($this->ranking[$key]);
+//                        var_dump($key);
+                        if(isset($nbCPs[$key])) {
+                            if ($nbCPs[$key] != ($this->nbCPs - 1)) {
+                                unset($this->ranking[$key]);
 //                        $rank = $prevRank[$structure->getLogin()];
-                        $currentRank = $currRank[$structure->getLogin()];
+                                $currentRank = $currRank[$structure->getLogin()];
+                            }else {
+                                $giveUp = 1;
+                            }
+                        }else {
+                            $giveUp = 1;
+                        }
                     }
                 }
 
@@ -538,10 +577,12 @@ class CheckpointsLivePlugin implements ManialinkPageAnswerListener, CallbackList
                     }
                 }
                 // Add new one
-                $this->ranking[] = array("login" => $structure->getLogin(), "nbCPs" => 0, "CPTime" => 999999999, "previousPlace" => $rank, "currentPlace" => $currentRank);
+                if ($giveUp == 0)
+                    $this->ranking[] = array("login" => $structure->getLogin(), "nbCPs" => 0, "CPTime" => 999999999, "previousPlace" => $rank, "currentPlace" => $currentRank);
             } else {
                 // First checkpoint for the player
-                $this->ranking[] = array("login" => $structure->getLogin(), "nbCPs" => 0, "CPTime" => 999999999, "previousPlace" => $rank, "currentPlace" => $rank);
+                if ($giveUp == 0)
+                    $this->ranking[] = array("login" => $structure->getLogin(), "nbCPs" => 0, "CPTime" => 999999999, "previousPlace" => $rank, "currentPlace" => $rank);
             }
 
             $nbrank = 1;
@@ -554,7 +595,7 @@ class CheckpointsLivePlugin implements ManialinkPageAnswerListener, CallbackList
             $CPTime = array();
             $previousPlace = array();
             foreach ($previousRank as $key => $row) {
-                $nbCPs[$key]  = $row['nbCPs'];
+                $nbCPs[$key] = $row['nbCPs'];
                 $CPTime[$key] = $row['CPTime'];
                 $previousPlace[$key] = $row['previousPlace'];
                 $currentPlace[$key] = $row['currentPlace'];
@@ -571,7 +612,7 @@ class CheckpointsLivePlugin implements ManialinkPageAnswerListener, CallbackList
 //                $prevnbCPs[$record['login']] = $record['nbCPs'];
 
                 $this->ranking[] = array("login" => $record['login'], "nbCPs" => $record['nbCPs'], "CPTime" => $record['CPTime'], "previousPlace" => $record['previousPlace'], "currentPlace" => $nbrank);
-                $nbrank ++;
+                $nbrank++;
             }
         } else {
             //If first player arrives on first Checkpoint
@@ -580,30 +621,32 @@ class CheckpointsLivePlugin implements ManialinkPageAnswerListener, CallbackList
         }
     }
 
-    function recursive_array_search($needle, $haystack, $currentKey = '') {
-        foreach($haystack as $key=>$value) {
+    function recursive_array_search($needle, $haystack, $currentKey = '')
+    {
+        foreach ($haystack as $key => $value) {
             if (is_array($value)) {
-                $nextKey = $this->recursive_array_search($needle,$value, $currentKey . '[' . $key . ']');
+                $nextKey = $this->recursive_array_search($needle, $value, $currentKey . '[' . $key . ']');
                 if ($nextKey) {
                     return $nextKey;
                 }
-            }
-            else if($value==$needle) {
-                return is_numeric($key) ? $currentKey . '[' .$key . ']' : $currentKey;
+            } else if ($value == $needle) {
+                return is_numeric($key) ? $currentKey . '[' . $key . ']' : $currentKey;
             }
         }
         return false;
     }
 
-    public function handleFinishCallback(OnWayPointEventStructure $structure){
+    public function handleFinishCallback(OnWayPointEventStructure $structure)
+    {
 
-        if($this->active){
+        if ($this->active) {
             $this->updateRanking($structure);
         }
 
     }
 
-    public function updateRanking(OnWayPointEventStructure $structure){
+    public function updateRanking(OnWayPointEventStructure $structure)
+    {
 
         // At least one player pass a Checkpoint
         if ($this->ranking) {
@@ -615,7 +658,7 @@ class CheckpointsLivePlugin implements ManialinkPageAnswerListener, CallbackList
             $previousPlace = array();
             $currentPlace = array();
             foreach ($previousRank as $key => $row) {
-                $nbCPs[$key]  = $row['nbCPs'];
+                $nbCPs[$key] = $row['nbCPs'];
                 $CPTime[$key] = $row['CPTime'];
                 $previousPlace[$key] = $row['previousPlace'];
                 $currentPlace[$key] = $row['currentPlace'];
@@ -638,7 +681,7 @@ class CheckpointsLivePlugin implements ManialinkPageAnswerListener, CallbackList
 //                $prevnbCPs[$record['login']] = $record['nbCPs'];
 
                 $ranking[] = array("login" => $record['login'], "nbCPs" => $record['nbCPs'], "CPTime" => $record['CPTime'], "previousPlace" => $nbrank, "currentPlace" => $record['currentPlace']);
-                $nbrank ++;
+                $nbrank++;
             }
             $rankexist = $this->recursive_array_search($structure->getLogin(), $this->ranking);
 
@@ -683,7 +726,7 @@ class CheckpointsLivePlugin implements ManialinkPageAnswerListener, CallbackList
             $CPTime = array();
             $previousPlace = array();
             foreach ($previousRank as $key => $row) {
-                $nbCPs[$key]  = $row['nbCPs'];
+                $nbCPs[$key] = $row['nbCPs'];
                 $CPTime[$key] = $row['CPTime'];
                 $previousPlace[$key] = $row['previousPlace'];
                 $currentPlace[$key] = $row['currentPlace'];
@@ -700,7 +743,7 @@ class CheckpointsLivePlugin implements ManialinkPageAnswerListener, CallbackList
 //                $prevnbCPs[$record['login']] = $record['nbCPs'];
 
                 $this->ranking[] = array("login" => $record['login'], "nbCPs" => $record['nbCPs'], "CPTime" => $record['CPTime'], "previousPlace" => $record['previousPlace'], "currentPlace" => $nbrank);
-                $nbrank ++;
+                $nbrank++;
             }
         } else {
             //If first player arrives on first Checkpoint
@@ -712,22 +755,24 @@ class CheckpointsLivePlugin implements ManialinkPageAnswerListener, CallbackList
 //        var_dump($this->ranking);
     }
 
-    public function handleCheckpointCallback(OnWayPointEventStructure $structure){
+    public function handleCheckpointCallback(OnWayPointEventStructure $structure)
+    {
 
 //        Logger::log("CP");
-        if($this->active){
+        $this->countCPs++;
+        if ($this->active) {
             $this->updateRanking($structure);
         }
     }
 
     public function handleSpec(array $callback)
     {
-        $actionId    = $callback[1][2];
+        $actionId = $callback[1][2];
         $actionArray = explode('.', $actionId, 3);
-        if(count($actionArray) < 2){
+        if (count($actionArray) < 2) {
             return;
         }
-        $action      = $actionArray[0] . '.' . $actionArray[1];
+        $action = $actionArray[0] . '.' . $actionArray[1];
 
         if (count($actionArray) > 2) {
 
@@ -748,38 +793,41 @@ class CheckpointsLivePlugin implements ManialinkPageAnswerListener, CallbackList
         }
     }
 
-	/**
-	 * @see \ManiaControl\Plugins\Plugin::unload()
-	 */
-	public function unload() {
+    /**
+     * @see \ManiaControl\Plugins\Plugin::unload()
+     */
+    public function unload()
+    {
 
-		$this->closeWidget(self::MLID_CHECKPOINTS_LIVE_WIDGET);
+        $this->closeWidget(self::MLID_CHECKPOINTS_LIVE_WIDGET);
         $this->closeWidget(self::MLID_CHECKPOINTS_LIVE_WIDGETTIMES);
 
-	}
-
-	/**
-	 * Handle PlayerConnect callback
-	 *
-	 * @param Player $player
-	 */
-	public function handlePlayerConnect(Player $player) {
-
-        if($this->active){
-            if ($this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_CHECKPOINTS_LIVE_ACTIVATED)) {
-                $this->displayCheckpointsLiveWidget($player->login);
-            }
-        }
-	}
+    }
 
     /**
      * Handle PlayerConnect callback
      *
      * @param Player $player
      */
-    public function handlePlayerDisconnect(Player $player) {
+    public function handlePlayerConnect(Player $player)
+    {
 
-        if($this->active){
+        if ($this->active) {
+            if ($this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_CHECKPOINTS_LIVE_ACTIVATED)) {
+                $this->displayCheckpointsLiveWidget($player->login);
+            }
+        }
+    }
+
+    /**
+     * Handle PlayerConnect callback
+     *
+     * @param Player $player
+     */
+    public function handlePlayerDisconnect(Player $player)
+    {
+
+        if ($this->active) {
 
             if ($this->ranking) {
                 // At least one player pass a Checkpoint
@@ -803,32 +851,32 @@ class CheckpointsLivePlugin implements ManialinkPageAnswerListener, CallbackList
 
     }
 
-    public function handlePlayerInfoChanged(Player $player) {
+    public function handlePlayerInfoChanged(Player $player)
+    {
 
-        if($this->active){
-
-            if ($this->ranking) {
-                // At least one player pass a Checkpoint
-                $newSpecStatus = $player->isSpectator;
-                if($newSpecStatus) {
-                    $rankexist = $this->recursive_array_search($player->login, $this->ranking);
-
-                    if ($rankexist) {
-                        // At least 2nd checkpoint for the player
-
-                        // Remove old record
-                        foreach ($this->ranking as $key => $val) {
-
-                            if ($val['login'] == $player->login) {
-                                unset($this->ranking[$key]);
-
-                            }
-                        }
-                        $this->updateWidget($this->ranking);
-                    }
-                }
-            }
-        }
+//        if($this->active){
+//
+//            if ($this->ranking) {
+//                // At least one player pass a Checkpoint
+//                $newSpecStatus = $player->isSpectator;
+//                if($newSpecStatus) {
+//                    $rankexist = $this->recursive_array_search($player->login, $this->ranking);
+//
+//                    if ($rankexist) {
+//                        // At least 2nd checkpoint for the player
+//
+//                        // Remove old record
+//                        foreach ($this->ranking as $key => $val) {
+//
+//                            if ($val['login'] == $player->login) {
+//                                    unset($this->ranking[$key]);
+//                            }
+//                        }
+//                        $this->updateWidget($this->ranking);
+//                    }
+//                }
+//            }
+//        }
 
     }
 
@@ -876,20 +924,22 @@ class CheckpointsLivePlugin implements ManialinkPageAnswerListener, CallbackList
 
         }
     }
-	/**
-	 * Update Widgets on Setting Changes
-	 *
-	 * @param Setting $setting
-	 */
-	public function updateSettings(Setting $setting) {
-		if ($setting->belongsToClass($this)) {
-			$this->displayWidgets();
-            $this->hideRaceRanking();
+
+    /**
+     * Update Widgets on Setting Changes
+     *
+     * @param Setting $setting
+     */
+    public function updateSettings(Setting $setting)
+    {
+        if ($setting->belongsToClass($this)) {
+            $this->displayWidgets();
+//            $this->hideRaceRanking();
 
             $this->hideSpecIcon();
 
         }
-	}
+    }
 
 
 }

@@ -26,7 +26,7 @@ class LocalRecordsCPLivePlugin implements CallbackListener, TimerListener, Plugi
 	* Constants
 	*/
 	const PLUGIN_ID      = 115;
-	const PLUGIN_VERSION = 0.35;
+	const PLUGIN_VERSION = 0.36;
 	const PLUGIN_NAME    = 'LocalRecordsCPLivePlugin';
 	const PLUGIN_AUTHOR  = 'jonthekiller, Jaka Vrhovec';
 
@@ -629,19 +629,25 @@ class LocalRecordsCPLivePlugin implements CallbackListener, TimerListener, Plugi
 			$playergaptime = 0;
 			if (isset($playerbesttime)) {
 				if (isset($playerbesttime[$checkpoint])) {
-					$playergaptime = $playercptime - $playerbesttime[$checkpoint];
+				    if (is_numeric($playercptime) AND is_numeric($playerbesttime[$checkpoint])) {
+                        $playergaptime = $playercptime - $playerbesttime[$checkpoint];
+                    }
 				}
 			}
 			$playertopgaptime = 0;
 			if (isset($toptime)) {
 				if (isset($toptime[$checkpoint])) {
-					$playertopgaptime = $playercptime - $toptime[$checkpoint];
+                    if (is_numeric($playercptime) AND is_numeric($toptime[$checkpoint])) {
+                        $playertopgaptime = $playercptime - $toptime[$checkpoint];
+                    }
 				}
 			}
 			$playerdeditopgaptime = 0.1;
 			if (isset($deditime)) {
 				if (isset($deditime[$checkpoint])) {
-					$playerdeditopgaptime = $playercptime - $deditime[$checkpoint];
+                    if (is_numeric($playercptime) AND is_numeric($deditime[$checkpoint])) {
+                        $playerdeditopgaptime = $playercptime - $deditime[$checkpoint];
+                    }
 				}
 			}
 
