@@ -43,7 +43,7 @@ class MatchPlugin implements ManialinkPageAnswerListener, CallbackListener, Comm
 {
 
     const PLUGIN_ID = 119;
-    const PLUGIN_VERSION = 0.81;
+    const PLUGIN_VERSION = 0.82;
     const PLUGIN_NAME = 'MatchPlugin';
     const PLUGIN_AUTHOR = 'jonthekiller';
 
@@ -1711,9 +1711,9 @@ class MatchPlugin implements ManialinkPageAnswerListener, CallbackListener, Comm
                                     $this->playersfinalist = array_unique($this->playersfinalist);
                                 }
 
-                                Logger::log(
-                                    $rank . ", " . $login . ", " . $nickname_simple . ", " . ($points + $roundpoints) . ", " . $roundpoints
-                                );
+//                                Logger::log(
+//                                    $rank . ", " . $login . ", " . $nickname_simple . ", " . ($points + $roundpoints) . ", " . $roundpoints
+//                                );
                                 $database .= $rank . "," . $login . "," . ($points + $roundpoints) . "" . PHP_EOL;
 
                                 if (!$realRound && $roundpoints > 0) {
@@ -1744,9 +1744,9 @@ class MatchPlugin implements ManialinkPageAnswerListener, CallbackListener, Comm
                                 $points = $result->getMatchPoints();
 
 
-                                Logger::log(
-                                    $rank . ", " . $login . ", " . $nickname_simple . ", " . ($points + $roundpoints) . ", " . $roundpoints
-                                );
+//                                Logger::log(
+//                                    $rank . ", " . $login . ", " . $nickname_simple . ", " . ($points + $roundpoints) . ", " . $roundpoints
+//                                );
                                 $database .= $rank . "," . $login . "," . ($points + $roundpoints) . "" . PHP_EOL;
 
                                 $this->currentscore = array_merge(
@@ -1901,6 +1901,33 @@ class MatchPlugin implements ManialinkPageAnswerListener, CallbackListener, Comm
                 $server = $this->maniaControl->getServer()->login;
 
 
+                // Re-order the results
+                if ($this->maniaControl->getSettingManager()->getSettingValue(
+                    $this,
+                    self::SETTING_MATCH_MATCH_MODE
+                ) == "Cup" OR $this->maniaControl->getSettingManager()->getSettingValue(
+                        $this,
+                        self::SETTING_MATCH_MATCH_MODE
+                    ) == "Rounds") {
+                    $temp_results = explode(PHP_EOL, $database);
+                    $temp_array = array();
+
+                    foreach ($temp_results as $temp_result) {
+                        if ($temp_result != null AND $temp_result != "") {
+                            $temp = explode(",", $temp_result);
+                            $temp_array[$temp[1]] = $temp[2];
+                        }
+                    }
+                    arsort($temp_array);
+
+                    $rank = 1;
+                    $database = "";
+                    foreach ($temp_array as $login => $points) {
+                        $database .= $rank . "," . $login . "," . $points . "" . PHP_EOL;
+                        $rank++;
+                    }
+                }
+
                 $query = "INSERT INTO `" . self::TABLE_ROUNDS . "`
 				(`server`, `rounds`)
 				VALUES
@@ -1914,6 +1941,7 @@ class MatchPlugin implements ManialinkPageAnswerListener, CallbackListener, Comm
                 }
                 $this->alreadydone = true;
 
+                $this->scores = $database;
 
                 //Logger::log("Rounds finished: " . $this->nbrounds);
             }
@@ -2153,6 +2181,7 @@ class MatchPlugin implements ManialinkPageAnswerListener, CallbackListener, Comm
 
                     return false;
                 }
+                Logger::log($this->scores);
             } elseif ($this->type == "TA") {
                 if ($this->livePlugin) {
                     $this->livePlugin->endTA();
@@ -2669,4 +2698,6 @@ class MatchPlugin implements ManialinkPageAnswerListener, CallbackListener, Comm
 
         }
     }
+
+
 }
