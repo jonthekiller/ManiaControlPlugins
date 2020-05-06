@@ -42,7 +42,7 @@ use Maniaplanet\DedicatedServer\InvalidArgumentException;
 class MatchPlugin implements ManialinkPageAnswerListener, CallbackListener, CommandListener, TimerListener, CommunicationListener, Plugin {
 
 	const PLUGIN_ID      = 119;
-	const PLUGIN_VERSION = 0.86;
+	const PLUGIN_VERSION = 0.88;
 	const PLUGIN_NAME    = 'MatchPlugin';
 	const PLUGIN_AUTHOR  = 'jonthekiller';
 
@@ -85,7 +85,7 @@ class MatchPlugin implements ManialinkPageAnswerListener, CallbackListener, Comm
 	const TABLE_MATCHS                                = 'drakonia_matchs';
 	//    const SETTING_MATCH_FORCESHOWOPPONENTS = 'Force Show Opponents';
 	const SETTING_MATCH_PAUSE_DURATION  = 'Pause Duration in seconds';
-	const SETTING_MATCH_NADEO_PAUSE     = 'Nadeo Pause System';
+//	const SETTING_MATCH_NADEO_PAUSE     = 'Nadeo Pause System';
 	const SETTING_MATCH_PAUSE_MAXNUMBER = 'Pause Max per Player';
 	const SETTING_MATCH_PAUSE_POSX      = 'Pause Widget-Position: X';
 	const SETTING_MATCH_PAUSE_POSY      = 'Pause Widget-Position: Y';
@@ -236,7 +236,7 @@ class MatchPlugin implements ManialinkPageAnswerListener, CallbackListener, Comm
 		//        $this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_MATCH_FORCESHOWOPPONENTS, true);
 		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_MATCH_PAUSE_DURATION, 120);
 		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_MATCH_PAUSE_MAXNUMBER, 1);
-		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_MATCH_NADEO_PAUSE, false);
+//		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_MATCH_NADEO_PAUSE, true);
 
 		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_MATCH_PAUSE_POSX, 0);
 		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_MATCH_PAUSE_POSY, 0);
@@ -513,6 +513,14 @@ class MatchPlugin implements ManialinkPageAnswerListener, CallbackListener, Comm
 					//                    Logger::log("Load Script");
 					$this->loadScript($scriptName, $loadedSettings);
 
+
+					//                Logger::log("Points repartition");
+					if ($this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_MATCH_MATCH_CUSTOMPOINTSREPARTITION)) {
+						$pointsrepartition = explode(",", $this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_MATCH_MATCH_POINTSREPARTITION));
+						//                    Logger::log("Set Points Repartition");
+						$this->maniaControl->getModeScriptEventManager()->setTrackmaniaPointsRepartition($pointsrepartition);
+					}
+
 				} else {
 
 					Logger::log("Conf from matchsettings file");
@@ -540,12 +548,7 @@ class MatchPlugin implements ManialinkPageAnswerListener, CallbackListener, Comm
 					$this->maniaControl->getMapManager()->shuffleMapList();
 				}
 
-				//                Logger::log("Points repartition");
-				if ($this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_MATCH_MATCH_CUSTOMPOINTSREPARTITION)) {
-					$pointsrepartition = explode(",", $this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_MATCH_MATCH_POINTSREPARTITION));
-					//                    Logger::log("Set Points Repartition");
-					$this->maniaControl->getModeScriptEventManager()->setTrackmaniaPointsRepartition($pointsrepartition);
-				}
+
 
 
 				$this->matchStarted = true;
@@ -945,18 +948,18 @@ class MatchPlugin implements ManialinkPageAnswerListener, CallbackListener, Comm
 
 			if (isset($text[1]) && $text[1] != "") {
 				$this->maniaControl->getChat()->sendChat('$<$0f0$o Admin force a break for ' . $text[1] . ' seconds!$>');
-				if ($this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_MATCH_NADEO_PAUSE)) {
+//				if ($this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_MATCH_NADEO_PAUSE)) {
 					$this->setNadeoPause(true, $text[1]);
-				} else {
-					$this->setPause(true, $text[1]);
-				}
+//				} else {
+//					$this->setPause(true, $text[1]);
+//				}
 			} else {
 				$this->maniaControl->getChat()->sendChat('$<$0f0$o Admin force a break for ' . $this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_MATCH_PAUSE_DURATION) . ' seconds!$>');
-				if ($this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_MATCH_NADEO_PAUSE)) {
+//				if ($this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_MATCH_NADEO_PAUSE)) {
 					$this->setNadeoPause(true);
-				} else {
-					$this->setPause(true);
-				}
+//				} else {
+//					$this->setPause(true);
+//				}
 			}
 		}
 	}
@@ -1130,11 +1133,11 @@ class MatchPlugin implements ManialinkPageAnswerListener, CallbackListener, Comm
 	public function onCommandUnsetPause(array $chatCallback, Player $player) {
 		if (($this->matchStarted) && ($this->getMatchMode() != "TimeAttack") && $this->pauseon) {
 			$this->maniaControl->getChat()->sendChat('$<$f00$o Admin stop the break!$>');
-			if ($this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_MATCH_NADEO_PAUSE) === false) {
-				$this->unsetPause();
-			} else {
+//			if ($this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_MATCH_NADEO_PAUSE) === false) {
+//				$this->unsetPause();
+//			} else {
 				$this->unsetNadeoPause();
-			}
+//			}
 		} else {
 			$this->maniaControl->getChat()->sendChat('$<$f00$o No pause in progress!$>', $player->login);
 		}
@@ -1437,11 +1440,11 @@ class MatchPlugin implements ManialinkPageAnswerListener, CallbackListener, Comm
 			$this->pauseasked = false;
 			Logger::log("Set Pause");
 
-			if ($this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_MATCH_NADEO_PAUSE)) {
+//			if ($this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_MATCH_NADEO_PAUSE)) {
 				$this->setNadeoPause();
-			} else {
-				$this->setPause();
-			}
+//			} else {
+//				$this->setPause();
+//			}
 		}
 
 		if ($this->matchStarted === true && $this->fakeround === false) {
