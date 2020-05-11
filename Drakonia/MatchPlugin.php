@@ -42,7 +42,7 @@ use Maniaplanet\DedicatedServer\InvalidArgumentException;
 class MatchPlugin implements ManialinkPageAnswerListener, CallbackListener, CommandListener, TimerListener, CommunicationListener, Plugin {
 
 	const PLUGIN_ID      = 119;
-	const PLUGIN_VERSION = 0.88;
+	const PLUGIN_VERSION = 0.89;
 	const PLUGIN_NAME    = 'MatchPlugin';
 	const PLUGIN_AUTHOR  = 'jonthekiller';
 
@@ -216,7 +216,7 @@ class MatchPlugin implements ManialinkPageAnswerListener, CallbackListener, Comm
 		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_MATCH_MATCH_NBWINNERS, 1);
 		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_MATCH_MATCH_NBMAPS, 3);
 		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_MATCH_MATCH_SHUFFLEMAPS, true);
-		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_MATCH_AUTHLEVEL, AuthenticationManager::AUTH_LEVEL_ADMIN);
+		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_MATCH_AUTHLEVEL, AuthenticationManager::getPermissionLevelNameArray(AuthenticationManager::AUTH_LEVEL_ADMIN));
 
 		//Custom Points for Team mode
 		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_MATCH_MATCH_CUSTOMPOINTSREPARTITION, true);
@@ -894,19 +894,38 @@ class MatchPlugin implements ManialinkPageAnswerListener, CallbackListener, Comm
 		return $this->settings_nbwinners;
 	}
 
-	public function onCommandMatchEndRound() {
+	public function onCommandMatchEndRound(array $chatCallback, Player $player) {
+		$authLevel = $this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_MATCH_AUTHLEVEL);
+		if (!$this->maniaControl->getAuthenticationManager()->checkRight($player, AuthenticationManager::getAuthLevel($authLevel))) {
+			$this->maniaControl->getAuthenticationManager()->sendNotAllowed($player);
+
+			return;
+		}
 		$this->maniaControl->getModeScriptEventManager()->forceTrackmaniaRoundEnd();
 
 	}
 
-	public function onCommandMatchEndWU() {
+	public function onCommandMatchEndWU(array $chatCallback, Player $player) {
+		$authLevel = $this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_MATCH_AUTHLEVEL);
+		if (!$this->maniaControl->getAuthenticationManager()->checkRight($player, AuthenticationManager::getAuthLevel($authLevel))) {
+			$this->maniaControl->getAuthenticationManager()->sendNotAllowed($player);
+
+			return;
+		}
 		try {
 			$this->maniaControl->getModeScriptEventManager()->triggerModeScriptEvent("Trackmania.WarmUp.ForceStop");
 		} catch (InvalidArgumentException $e) {
 		}
 	}
 
-	public function onCommandSetPoints(array $chatCallback) {
+	public function onCommandSetPoints(array $chatCallback, Player $adminplayer) {
+
+		$authLevel = $this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_MATCH_AUTHLEVEL);
+		if (!$this->maniaControl->getAuthenticationManager()->checkRight($adminplayer, AuthenticationManager::getAuthLevel($authLevel))) {
+			$this->maniaControl->getAuthenticationManager()->sendNotAllowed($adminplayer);
+
+			return;
+		}
 		$text = $chatCallback[1][2];
 		$text = explode(" ", $text);
 		Logger::log($text[1] . " " . $text[2]);
@@ -941,7 +960,14 @@ class MatchPlugin implements ManialinkPageAnswerListener, CallbackListener, Comm
 
 	}
 
-	public function onCommandSetPause(array $chatCallback) {
+	public function onCommandSetPause(array $chatCallback, Player $player) {
+
+		$authLevel = $this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_MATCH_AUTHLEVEL);
+		if (!$this->maniaControl->getAuthenticationManager()->checkRight($player, AuthenticationManager::getAuthLevel($authLevel))) {
+			$this->maniaControl->getAuthenticationManager()->sendNotAllowed($player);
+
+			return;
+		}
 		if (($this->matchStarted) && ($this->getMatchMode() != "TimeAttack")) {
 			$text = $chatCallback[1][2];
 			$text = explode(" ", $text);
@@ -1131,6 +1157,12 @@ class MatchPlugin implements ManialinkPageAnswerListener, CallbackListener, Comm
 	}
 
 	public function onCommandUnsetPause(array $chatCallback, Player $player) {
+		$authLevel = $this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_MATCH_AUTHLEVEL);
+		if (!$this->maniaControl->getAuthenticationManager()->checkRight($player, AuthenticationManager::getAuthLevel($authLevel))) {
+			$this->maniaControl->getAuthenticationManager()->sendNotAllowed($player);
+
+			return;
+		}
 		if (($this->matchStarted) && ($this->getMatchMode() != "TimeAttack") && $this->pauseon) {
 			$this->maniaControl->getChat()->sendChat('$<$f00$o Admin stop the break!$>');
 //			if ($this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_MATCH_NADEO_PAUSE) === false) {
@@ -1632,7 +1664,7 @@ class MatchPlugin implements ManialinkPageAnswerListener, CallbackListener, Comm
 
 	public function onCommandMatchStart(array $chatCallback, Player $player) {
 		$authLevel = $this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_MATCH_AUTHLEVEL);
-		if (!$this->maniaControl->getAuthenticationManager()->checkRight($player, $authLevel)) {
+		if (!$this->maniaControl->getAuthenticationManager()->checkRight($player, AuthenticationManager::getAuthLevel($authLevel))) {
 			$this->maniaControl->getAuthenticationManager()->sendNotAllowed($player);
 
 			return;
@@ -1642,7 +1674,7 @@ class MatchPlugin implements ManialinkPageAnswerListener, CallbackListener, Comm
 
 	public function onCommandMatchRecover(array $chatCallback, Player $player) {
 		$authLevel = $this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_MATCH_AUTHLEVEL);
-		if (!$this->maniaControl->getAuthenticationManager()->checkRight($player, $authLevel)) {
+		if (!$this->maniaControl->getAuthenticationManager()->checkRight($player, AuthenticationManager::getAuthLevel($authLevel))) {
 			$this->maniaControl->getAuthenticationManager()->sendNotAllowed($player);
 
 			return;
@@ -1765,7 +1797,7 @@ class MatchPlugin implements ManialinkPageAnswerListener, CallbackListener, Comm
 	 */
 	public function onCommandMatchStop(array $chatCallback, Player $player) {
 		$authLevel = $this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_MATCH_AUTHLEVEL);
-		if (!$this->maniaControl->getAuthenticationManager()->checkRight($player, $authLevel)) {
+		if (!$this->maniaControl->getAuthenticationManager()->checkRight($player, AuthenticationManager::getAuthLevel($authLevel))) {
 			$this->maniaControl->getAuthenticationManager()->sendNotAllowed($player);
 
 			return;
