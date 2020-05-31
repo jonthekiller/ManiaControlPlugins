@@ -20,7 +20,7 @@ use ManiaControl\Settings\SettingManager;
  * Message Widget Plugin
  *
  * @author    jonthekiller
- * @copyright 2017 Drakonia Team
+ * @copyright 2020 Drakonia Team
  * @license   http://www.gnu.org/licenses/ GNU General Public License, Version 3
  */
 class MessageWidgetPlugin implements CallbackListener, TimerListener, Plugin {
@@ -28,7 +28,7 @@ class MessageWidgetPlugin implements CallbackListener, TimerListener, Plugin {
 	 * Constants
 	 */
 	const PLUGIN_ID      = 108;
-	const PLUGIN_VERSION = 1.51;
+	const PLUGIN_VERSION = 1.52;
 	const PLUGIN_NAME    = 'MessageWidgetPlugin';
 	const PLUGIN_AUTHOR  = 'jonthekiller';
 
@@ -39,10 +39,10 @@ class MessageWidgetPlugin implements CallbackListener, TimerListener, Plugin {
 	const SETTING_MESSAGE_WIDGET_POSY      = 'Message-Widget-Position: Y';
 	const SETTING_MESSAGE_WIDGET_WIDTH     = 'Message-Widget-Size: Width';
 	const SETTING_MESSAGE_WIDGET_HEIGHT    = 'Message-Widget-Size: Height';
-	const SETTING_MESSAGE_WIDGET_MESSAGE    = 'Message-Widget-Message:';
-	const SETTING_MESSAGE_WIDGET_POSITIONX    = 'Message-Widget-Text Position: X';
-	const SETTING_MESSAGE_WIDGET_POSITIONY    = 'Message-Widget-Text Position: Y';
-	const SETTING_MESSAGE_WIDGET_POSITIONZ    = 'Message-Widget-Text Position: Z';
+	const SETTING_MESSAGE_WIDGET_MESSAGE   = 'Message-Widget-Message:';
+	const SETTING_MESSAGE_WIDGET_POSITIONX = 'Message-Widget-Text Position: X';
+	const SETTING_MESSAGE_WIDGET_POSITIONY = 'Message-Widget-Text Position: Y';
+	const SETTING_MESSAGE_WIDGET_POSITIONZ = 'Message-Widget-Text Position: Z';
 
 	/*
 	 * Private properties
@@ -86,8 +86,8 @@ class MessageWidgetPlugin implements CallbackListener, TimerListener, Plugin {
 	}
 
 	/**
- * @see \ManiaControl\Plugins\Plugin::getDescription()
- */
+	 * @see \ManiaControl\Plugins\Plugin::getDescription()
+	 */
 	public static function getDescription() {
 		return 'Plugin offers a simple Message Widget';
 	}
@@ -103,15 +103,15 @@ class MessageWidgetPlugin implements CallbackListener, TimerListener, Plugin {
 		$this->maniaControl->getCallbackManager()->registerCallbackListener(SettingManager::CB_SETTING_CHANGED, $this, 'updateSettings');
 
 		// Settings
-		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_MESSAGE_WIDGET_ACTIVATED, true);
-		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_MESSAGE_WIDGET_POSX, 125);
-		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_MESSAGE_WIDGET_POSY, 69);
-		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_MESSAGE_WIDGET_WIDTH, 70);
-		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_MESSAGE_WIDGET_HEIGHT, 15);
-		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_MESSAGE_WIDGET_POSITIONX, 0);
-		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_MESSAGE_WIDGET_POSITIONY, 6);
-		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_MESSAGE_WIDGET_POSITIONZ, 0.2);
-		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_MESSAGE_WIDGET_MESSAGE, "Here is your custom message");
+		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_MESSAGE_WIDGET_ACTIVATED, true, "Activate the widget");
+		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_MESSAGE_WIDGET_POSX, 125, "Position of the widget (on X axis)");
+		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_MESSAGE_WIDGET_POSY, 69, "Position of the widget (on Y axis)");
+		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_MESSAGE_WIDGET_WIDTH, 70, "Width of the widget");
+		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_MESSAGE_WIDGET_HEIGHT, 15, "Height of the widget");
+		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_MESSAGE_WIDGET_POSITIONX, 0, "Position of the message (on X axis)");
+		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_MESSAGE_WIDGET_POSITIONY, 6, "Position of the message (on Y axis)");
+		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_MESSAGE_WIDGET_POSITIONZ, 0.2, "Position of the message (on Z axis)");
+		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_MESSAGE_WIDGET_MESSAGE, "Here is your custom message", "Message to display");
 
 		$this->displayWidgets();
 
@@ -139,10 +139,10 @@ class MessageWidgetPlugin implements CallbackListener, TimerListener, Plugin {
 		$posY         = $this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_MESSAGE_WIDGET_POSY);
 		$width        = $this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_MESSAGE_WIDGET_WIDTH);
 		$height       = $this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_MESSAGE_WIDGET_HEIGHT);
-		$message       = $this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_MESSAGE_WIDGET_MESSAGE);
-		$positionx       = $this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_MESSAGE_WIDGET_POSITIONX);
-		$positiony       = $this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_MESSAGE_WIDGET_POSITIONY);
-		$positionz       = $this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_MESSAGE_WIDGET_POSITIONZ);
+		$message      = $this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_MESSAGE_WIDGET_MESSAGE);
+		$positionx    = $this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_MESSAGE_WIDGET_POSITIONX);
+		$positiony    = $this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_MESSAGE_WIDGET_POSITIONY);
+		$positionz    = $this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_MESSAGE_WIDGET_POSITIONZ);
 		$quadStyle    = $this->maniaControl->getManialinkManager()->getStyleManager()->getDefaultQuadStyle();
 		$quadSubstyle = $this->maniaControl->getManialinkManager()->getStyleManager()->getDefaultQuadSubstyle();
 
@@ -162,7 +162,7 @@ class MessageWidgetPlugin implements CallbackListener, TimerListener, Plugin {
 
 		$label = new Label_Text();
 		$frame->addChild($label);
-		$label->setPosition($positionx  ,  $positiony  ,  $positionz);
+		$label->setPosition($positionx, $positiony, $positionz);
 		$label->setVerticalAlign($label::TOP);
 		$label->setTextSize(1);
 		$label->setTextColor('fff');

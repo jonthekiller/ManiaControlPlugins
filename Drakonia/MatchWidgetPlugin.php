@@ -29,7 +29,7 @@ use ManiaControl\Utils\Formatter;
  * Match Live Plugin
  *
  * @author    jonthekiller
- * @copyright 2017 Drakonia Team
+ * @copyright 2020 Drakonia Team
  * @license   http://www.gnu.org/licenses/ GNU General Public License, Version 3
  */
 class MatchWidgetPlugin implements ManialinkPageAnswerListener, CallbackListener, TimerListener, Plugin {
@@ -37,7 +37,7 @@ class MatchWidgetPlugin implements ManialinkPageAnswerListener, CallbackListener
 	 * Constants
 	 */
 	const PLUGIN_ID      = 127;
-	const PLUGIN_VERSION = 0.51;
+	const PLUGIN_VERSION = 0.52;
 	const PLUGIN_NAME    = 'MatchWidgetPlugin';
 	const PLUGIN_AUTHOR  = 'jonthekiller';
 
@@ -59,6 +59,7 @@ class MatchWidgetPlugin implements ManialinkPageAnswerListener, CallbackListener
 	const SETTING_MATCHWIDGET_SHOWPLAYERS          = 'Show for Players';
 	const SETTING_MATCHWIDGET_SHOWSPECTATORS       = 'Show for Spectators';
 	const SETTINGS_MATCHWIDGET_HIDE_SPEC           = 'Hide Spec Icon';
+	const SETTINGS_MATCHWIDGET_MOVE_COUNTDOWN           = 'Move Countdown';
 	const SETTINGS_MATCHWIDGET_COUNTDOWN_POS           = 'Countdown Position';
 	const SETTINGS_MATCHWIDGET_COUNTDOWN_SIZE          = 'Countdown Size';
 
@@ -73,12 +74,13 @@ class MatchWidgetPlugin implements ManialinkPageAnswerListener, CallbackListener
 	// $ranking = array ($playerlogin, $nbCPs, $CPTime)
 	private $ranking = array();
 	// Gamemodes supported by the plugin
-	private $gamemodes   = array("Cup.Script.txt", "Rounds.Script.txt", "Team.Script.txt", "TimeAttack.Script.txt");
+	private $gamemodes   = array("Cup.Script.txt", "Rounds.Script.txt", "Team.Script.txt");
 	private $script      = array();
 	private $active      = false;
 	public  $matchPlugin = "";
 
 	/**
+	 * @param \ManiaControl\ManiaControl $maniaControl
 	 * @see \ManiaControl\Plugins\Plugin::prepare()
 	 */
 	public static function prepare(ManiaControl $maniaControl) {
@@ -116,10 +118,12 @@ class MatchWidgetPlugin implements ManialinkPageAnswerListener, CallbackListener
 	 * @see \ManiaControl\Plugins\Plugin::getDescription()
 	 */
 	public static function getDescription() {
-		return 'Display a widget to show the Checkpoints Live information for Rounds/Team/Cup mode';
+		return 'Display a widget to show the Match Live information for Rounds/Team/Cup mode';
 	}
 
 	/**
+	 * @param \ManiaControl\ManiaControl $maniaControl
+	 * @return bool
 	 * @see \ManiaControl\Plugins\Plugin::load()
 	 */
 	public function load(ManiaControl $maniaControl) {
@@ -143,22 +147,23 @@ class MatchWidgetPlugin implements ManialinkPageAnswerListener, CallbackListener
 
 
 		// Settings
-		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_MATCHWIDGET_LIVE_ACTIVATED, true);
-		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTINGS_MATCHWIDGET_MOVE_RACE_RANKING, false);
-		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTINGS_MATCHWIDGET_HIDE_SPEC, true);
-		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_MATCHWIDGET_SHOWPLAYERS, true);
-		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_MATCHWIDGET_SHOWSPECTATORS, true);
-		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_MATCHWIDGET_LIVE_POSX, -139);
-		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_MATCHWIDGET_LIVE_POSY, 40);
-		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_MATCHWIDGET_LIVE_LINESCOUNT, 4);
-		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_MATCHWIDGET_LIVE_WIDTH, 42);
+		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_MATCHWIDGET_LIVE_ACTIVATED, true, "Active the widget");
+		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTINGS_MATCHWIDGET_MOVE_RACE_RANKING, false, "Move Nadeo Race Ranking widget (displayed at the end of the round)");
+		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTINGS_MATCHWIDGET_HIDE_SPEC, true, "Hide Spectator icon for players");
+		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_MATCHWIDGET_SHOWPLAYERS, true, "Display widget for players");
+		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_MATCHWIDGET_SHOWSPECTATORS, true, "Display widget for spectators");
+		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_MATCHWIDGET_LIVE_POSX, -139, "Position of the widget (on X axis)");
+		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_MATCHWIDGET_LIVE_POSY, 40, "Position of the widget (on Y axis)");
+		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_MATCHWIDGET_LIVE_LINESCOUNT, 4, "Number of players to display");
+		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_MATCHWIDGET_LIVE_WIDTH, 42, "Width of the widget");
 		//        $this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_MATCHWIDGET_LIVE_HEIGHT, 25);
-		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_MATCHWIDGET_LIVE_LINE_HEIGHT, 4);
-		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTINGS_MATCHWIDGET_MOVE_RACE_RANKING_X, 100);
-		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTINGS_MATCHWIDGET_MOVE_RACE_RANKING_Y, 50);
-		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTINGS_MATCHWIDGET_MOVE_RACE_RANKING_Z, 150);
-		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTINGS_MATCHWIDGET_COUNTDOWN_POS, '0 0 5');
-		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTINGS_MATCHWIDGET_COUNTDOWN_SIZE, 1);
+		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_MATCHWIDGET_LIVE_LINE_HEIGHT, 4, "Height of a player line");
+		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTINGS_MATCHWIDGET_MOVE_RACE_RANKING_X, 100, "Position of the Race Ranking widget (on X axis)");
+		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTINGS_MATCHWIDGET_MOVE_RACE_RANKING_Y, 50, "Position of the Race Ranking widget (on Y axis)");
+		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTINGS_MATCHWIDGET_MOVE_RACE_RANKING_Z, 150, "Position of the Race Ranking widget (on Z axis)");
+		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTINGS_MATCHWIDGET_COUNTDOWN_POS, '153 -7 5', "Position of the Countdown (X Y Z)");
+		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTINGS_MATCHWIDGET_COUNTDOWN_SIZE, 1, "Size of the Countdown");
+		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTINGS_MATCHWIDGET_MOVE_COUNTDOWN, false, "Move Countdown");
 
 		$script       = $this->maniaControl->getClient()->getScriptName();
 		$this->script = $script['CurrentValue'];
@@ -576,14 +581,14 @@ class MatchWidgetPlugin implements ManialinkPageAnswerListener, CallbackListener
 			$properties = "<ui_properties>
     <round_scores pos='-158.5 40. 150.' visible='true' />
   </ui_properties>";
-			Logger::log('Put Race Ranking Widget to the original place');
+//			Logger::log('Put Race Ranking Widget to the original place');
 			$this->maniaControl->getModeScriptEventManager()->setTrackmaniaUIProperties($properties);
 
 		} else {
 			$properties = "<ui_properties>
     <round_scores pos='" . $this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTINGS_MATCHWIDGET_MOVE_RACE_RANKING_X) . " " . $this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTINGS_MATCHWIDGET_MOVE_RACE_RANKING_Y) . ". " . $this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTINGS_MATCHWIDGET_MOVE_RACE_RANKING_Z) . ".' visible='true' />
   </ui_properties>";
-			Logger::log('Put Race Ranking Widget to custom position');
+//			Logger::log('Put Race Ranking Widget to custom position');
 			$this->maniaControl->getModeScriptEventManager()->setTrackmaniaUIProperties($properties);
 
 		}
@@ -593,14 +598,14 @@ class MatchWidgetPlugin implements ManialinkPageAnswerListener, CallbackListener
 		if ($this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTINGS_MATCHWIDGET_HIDE_SPEC)) {
 			$properties = "<ui_properties><viewers_count visible='false'/></ui_properties>";
 
-			Logger::log('Hide Spec Icon');
+//			Logger::log('Hide Spec Icon');
 			$this->maniaControl->getModeScriptEventManager()->setTrackmaniaUIProperties($properties);
 
 		} else {
 			$properties = "<ui_properties>
     <viewers_count visible='true' pos='157. -40. 5.\' />
   </ui_properties>";
-			Logger::log('Show Spec Icon');
+//			Logger::log('Show Spec Icon');
 			$this->maniaControl->getModeScriptEventManager()->setTrackmaniaUIProperties($properties);
 
 		}
@@ -608,17 +613,17 @@ class MatchWidgetPlugin implements ManialinkPageAnswerListener, CallbackListener
 
 
 	public function moveCountdown() {
-		if ($this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTINGS_MATCHWIDGET_HIDE_SPEC)) {
-			$properties = "<ui_properties><countdown  visible='true' textsize='".$this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTINGS_MATCHWIDGET_COUNTDOWN_POS)."' size='".$this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTINGS_MATCHWIDGET_COUNTDOWN_SIZE)."'/></ui_properties>";
+		if ($this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTINGS_MATCHWIDGET_MOVE_COUNTDOWN)) {
+			$properties = "<ui_properties><countdown visible='true' pos='".$this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTINGS_MATCHWIDGET_COUNTDOWN_POS)."'/></ui_properties>";
 
-			Logger::log('Move Countdown');
+//			Logger::log('Move Countdown');
 			$this->maniaControl->getModeScriptEventManager()->setTrackmaniaUIProperties($properties);
 
 		} else {
 			$properties = "<ui_properties>
     <countdown visible='true' pos='153. -7. 5.\' />
   </ui_properties>";
-			Logger::log('Countdown initial place');
+//			Logger::log('Countdown initial place');
 			$this->maniaControl->getModeScriptEventManager()->setTrackmaniaUIProperties($properties);
 
 		}

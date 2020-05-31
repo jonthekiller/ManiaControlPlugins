@@ -26,44 +26,45 @@ class LocalRecordsCPLivePlugin implements CallbackListener, TimerListener, Plugi
 	* Constants
 	*/
 	const PLUGIN_ID      = 115;
-	const PLUGIN_VERSION = 0.36;
+	const PLUGIN_VERSION = 0.37;
 	const PLUGIN_NAME    = 'LocalRecordsCPLivePlugin';
 	const PLUGIN_AUTHOR  = 'jonthekiller, Jaka Vrhovec';
 
 
-	const SETTING_LRCPLIVE_ACTIVATED = 'LocalRecordsCPLivePlugin Activated';
+	const SETTING_LRCPLIVE_ACTIVATED        = 'LocalRecordsCPLivePlugin Activated';
 	const MLID_LRCPLIVE_WIDGET              = 'LocalRecordsCPLivePlugin.Widget';
-	const SETTING_LRCPLIVE_WIDGET1_POSX      = 'Top1-Position: X';
-	const SETTING_LRCPLIVE_WIDGET1_POSY      = 'Top1-Position: Y';
-	const SETTING_LRCPLIVE_WIDGET2_POSX      = 'MyTop-Position: X';
-	const SETTING_LRCPLIVE_WIDGET2_POSY      = 'MyTop-Position: Y';
-	const SETTING_LRCPLIVE_WIDGET3_POSX      = 'DediTop1-Position: X';
-	const SETTING_LRCPLIVE_WIDGET3_POSY      = 'DediTop1-Position: Y';
-	const SETTING_LRCPLIVE_TEXT_SIZE      = 'Text Size';
+	const SETTING_LRCPLIVE_WIDGET1_POSX     = 'Top1-Position: X';
+	const SETTING_LRCPLIVE_WIDGET1_POSY     = 'Top1-Position: Y';
+	const SETTING_LRCPLIVE_WIDGET2_POSX     = 'MyTop-Position: X';
+	const SETTING_LRCPLIVE_WIDGET2_POSY     = 'MyTop-Position: Y';
+	const SETTING_LRCPLIVE_WIDGET3_POSX     = 'DediTop1-Position: X';
+	const SETTING_LRCPLIVE_WIDGET3_POSY     = 'DediTop1-Position: Y';
+	const SETTING_LRCPLIVE_TEXT_SIZE        = 'Text Size';
 	const SETTING_LRCPLIVE_SHOWPLAYERS      = 'Show for Players';
-	const SETTING_LRCPLIVE_SHOWSPECTATORS     = 'Show for Spectators';
-	const SETTING_LRCPLIVE_MAXNUMBERPLAYERS     = 'Show if less players than';
+	const SETTING_LRCPLIVE_SHOWSPECTATORS   = 'Show for Spectators';
+	const SETTING_LRCPLIVE_MAXNUMBERPLAYERS = 'Show if less players than';
 
 
 	const DEFAULT_LOCALRECORDS_PLUGIN = 'MCTeam\LocalRecordsPlugin';
-	const DEFAULT_DEDIMANIA_PLUGIN = 'MCTeam\Dedimania\DedimaniaPlugin';
+	const DEFAULT_DEDIMANIA_PLUGIN    = 'MCTeam\Dedimania\DedimaniaPlugin';
 
 	/** @var ManiaControl $maniaControl */
-	private $maniaControl         = null;
-	private $active = false;
-	private $dediactive = false;
-	private $notmuchplayers = true;
+	private $maniaControl       = null;
+	private $active             = false;
+	private $dediactive         = false;
+	private $notmuchplayers     = true;
 	private $LocalRecordsPlugin = "";
-	private $DedimaniaPlugin = "";
-	private $localrecord = array();
-	private $toprecord = array();
-	private $playersrecords = array();
-	private $spectateview = array();
-	private $topdedimania = array();
+	private $DedimaniaPlugin    = "";
+	private $localrecord        = array();
+	private $toprecord          = array();
+	private $playersrecords     = array();
+	private $spectateview       = array();
+	private $topdedimania       = array();
 
 	private $currentPlayerCps = array();
 
 	/**
+	 * @param \ManiaControl\ManiaControl $maniaControl
 	 * @see \ManiaControl\Plugins\Plugin::prepare()
 	 */
 	public static function prepare(ManiaControl $maniaControl) {
@@ -105,23 +106,25 @@ class LocalRecordsCPLivePlugin implements CallbackListener, TimerListener, Plugi
 	}
 
 	/**
+	 * @param \ManiaControl\ManiaControl $maniaControl
+	 * @return bool
 	 * @see \ManiaControl\Plugins\Plugin::load()
 	 */
 	public function load(ManiaControl $maniaControl) {
 		$this->maniaControl = $maniaControl;
 
 		// Settings
-		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_LRCPLIVE_ACTIVATED, true);
-		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_LRCPLIVE_TEXT_SIZE, 2);
-		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_LRCPLIVE_WIDGET1_POSX, -45);
-		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_LRCPLIVE_WIDGET1_POSY, 70);
-		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_LRCPLIVE_WIDGET2_POSX, 45);
-		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_LRCPLIVE_WIDGET2_POSY, 70);
-		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_LRCPLIVE_WIDGET3_POSX, 0);
-		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_LRCPLIVE_WIDGET3_POSY, 70);
-		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_LRCPLIVE_SHOWPLAYERS, true);
-		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_LRCPLIVE_SHOWSPECTATORS, true);
-		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_LRCPLIVE_MAXNUMBERPLAYERS, 100);
+		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_LRCPLIVE_ACTIVATED, true, "Active the widget");
+		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_LRCPLIVE_TEXT_SIZE, 2, "Size of the text");
+		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_LRCPLIVE_WIDGET1_POSX, -45, "Position of Top1 message (on X axis)");
+		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_LRCPLIVE_WIDGET1_POSY, 70, "Position of Top1 message (on Y axis)");
+		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_LRCPLIVE_WIDGET2_POSX, 45, "Position of Player message (on X axis)");
+		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_LRCPLIVE_WIDGET2_POSY, 70, "Position of Player message (on Y axis)");
+		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_LRCPLIVE_WIDGET3_POSX, 0, "Position of Dedi1 message (on X axis)");
+		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_LRCPLIVE_WIDGET3_POSY, 70, "Position of Dedi1 message (on Y axis)");
+		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_LRCPLIVE_SHOWPLAYERS, true, "Display widget for players");
+		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_LRCPLIVE_SHOWSPECTATORS, true, "Display widget for spectators");
+		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_LRCPLIVE_MAXNUMBERPLAYERS, 100, "Disable the widget if more than X players (performance)");
 
 		// Callbacks
 
@@ -151,55 +154,50 @@ class LocalRecordsCPLivePlugin implements CallbackListener, TimerListener, Plugi
 	}
 
 
-	public function init()
-	{
+	public function init() {
 
 		$this->maniaControl->getTimerManager()->registerOneTimeListening($this, function () use (&$player) {
 
-            $numberplayers = $this->maniaControl->getPlayerManager()->getPlayerCount(false);
+			$numberplayers = $this->maniaControl->getPlayerManager()->getPlayerCount(false);
 
-            if ($numberplayers < ($this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_LRCPLIVE_MAXNUMBERPLAYERS) +1)) {
-                $this->notmuchplayers = true;
-                $this->LocalRecordsPlugin = $this->maniaControl->getPluginManager()->getPlugin(self::DEFAULT_LOCALRECORDS_PLUGIN);
-                $this->DedimaniaPlugin = $this->maniaControl->getPluginManager()->getPlugin(self::DEFAULT_DEDIMANIA_PLUGIN);
+			if ($numberplayers < ($this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_LRCPLIVE_MAXNUMBERPLAYERS) + 1)) {
+				$this->notmuchplayers     = true;
+				$this->LocalRecordsPlugin = $this->maniaControl->getPluginManager()->getPlugin(self::DEFAULT_LOCALRECORDS_PLUGIN);
+				$this->DedimaniaPlugin    = $this->maniaControl->getPluginManager()->getPlugin(self::DEFAULT_DEDIMANIA_PLUGIN);
 
-                if ($this->LocalRecordsPlugin) {
-                    $this->active = true;
-                    Logger::log("Can load LRCPLive plugin");
-                } else {
-                    $this->maniaControl->getChat()->sendErrorToAdmins('Please activate first the LocalRecords plugin');
-                }
+				if ($this->LocalRecordsPlugin) {
+					$this->active = true;
+					Logger::log("Can load LRCPLive plugin");
+				} else {
+					$this->maniaControl->getChat()->sendErrorToAdmins('Please activate first the LocalRecords plugin');
+				}
 
-                if ($this->DedimaniaPlugin) {
-                    $this->dediactive = true;
-                    Logger::log("Can load LRCPLive Dedimania plugin");
-                } else {
-                    $this->maniaControl->getChat()->sendErrorToAdmins('Please activate first the Dedimania plugin');
-                }
+				if ($this->DedimaniaPlugin) {
+					$this->dediactive = true;
+					Logger::log("Can load LRCPLive Dedimania plugin");
+				} else {
+					$this->maniaControl->getChat()->sendErrorToAdmins('Please activate first the Dedimania plugin');
+				}
 
-                $players = $this->maniaControl->getPlayerManager()->getPlayers();
+				$players = $this->maniaControl->getPlayerManager()->getPlayers();
 
-                foreach ($players as $player) {
-                    $this->initTimes($player);
-                }
+				foreach ($players as $player) {
+					$this->initTimes($player);
+				}
 
-            }else{
-                $this->notmuchplayers=false;
-            }
+			} else {
+				$this->notmuchplayers = false;
+			}
 			//            Logger::log("Init LRCPLive finished");
 		}, 500);
-
 
 	}
 
 
-	private function initTimes(Player $player)
-	{
-		if($this->active)
-		{
+	private function initTimes(Player $player) {
+		if ($this->active) {
 			$map = $this->maniaControl->getMapManager()->getCurrentMap();
-			if(empty($this->toprecord))
-			{
+			if (empty($this->toprecord)) {
 				$this->toprecord = $this->LocalRecordsPlugin->getLocalRecords($map, 1);
 			}
 			$this->localrecord = $this->LocalRecordsPlugin->getLocalRecord($map, $player);
@@ -212,44 +210,42 @@ class LocalRecordsCPLivePlugin implements CallbackListener, TimerListener, Plugi
 			//                    var_dump($this->topdedimania[0]->checkpoints);
 			//            }
 			//var_dump($this->localrecord);
-			if($this->localrecord) {
+			if ($this->localrecord) {
 				$this->playersrecords[$player->login]["checkpoints"] = $this->localrecord->checkpoints;
-				$this->playersrecords[$player->login]["time"] = $this->localrecord->time;
+				$this->playersrecords[$player->login]["time"]        = $this->localrecord->time;
 			}
 		}
 	}
 
-	public function handle2Seconds()
-	{
-        if($this->notmuchplayers) {
-            if($this->active) {
-                $map = $this->maniaControl->getMapManager()->getCurrentMap();
-                $this->toprecord = $this->LocalRecordsPlugin->getLocalRecords($map, 1);
-            }
-        }
+	public function handle2Seconds() {
+		if ($this->notmuchplayers) {
+			if ($this->active) {
+				$map             = $this->maniaControl->getMapManager()->getCurrentMap();
+				$this->toprecord = $this->LocalRecordsPlugin->getLocalRecords($map, 1);
+			}
+		}
 	}
 
-	public function handle60Seconds()
-	{
-        $numberplayers = $this->maniaControl->getPlayerManager()->getPlayerCount(false);
+	public function handle60Seconds() {
+		$numberplayers = $this->maniaControl->getPlayerManager()->getPlayerCount(false);
 
-        if ($numberplayers < ($this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_LRCPLIVE_MAXNUMBERPLAYERS) +1)) {
-            $this->notmuchplayers=true;
-        }else{
-            $this->notmuchplayers=false;
-            $this->closeWidget(self::MLID_LRCPLIVE_WIDGET);
-        }
-        if($this->notmuchplayers) {
-            if ($this->active) {
-                if ($this->dediactive) {
-                    //                Logger::log("Start get Dedimania Records");
-                    $this->topdedimania = $this->DedimaniaPlugin->getDedimaniaRecords();
+		if ($numberplayers < ($this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_LRCPLIVE_MAXNUMBERPLAYERS) + 1)) {
+			$this->notmuchplayers = true;
+		} else {
+			$this->notmuchplayers = false;
+			$this->closeWidget(self::MLID_LRCPLIVE_WIDGET);
+		}
+		if ($this->notmuchplayers) {
+			if ($this->active) {
+				if ($this->dediactive) {
+					//                Logger::log("Start get Dedimania Records");
+					$this->topdedimania = $this->DedimaniaPlugin->getDedimaniaRecords();
 
-                    //                if (isset($this->topdedimania[0]))
-                    //                    var_dump($this->topdedimania[0]->checkpoints);
-                }
-            }
-        }
+					//                if (isset($this->topdedimania[0]))
+					//                    var_dump($this->topdedimania[0]->checkpoints);
+				}
+			}
+		}
 	}
 
 	/**
@@ -257,18 +253,16 @@ class LocalRecordsCPLivePlugin implements CallbackListener, TimerListener, Plugi
 	 *
 	 * @param Player $player
 	 */
-	public function handlePlayerConnect(Player $player)
-	{
-        if($this->notmuchplayers) {
-            if($this->active){
-                $this->initTimes($player);
-            }
-        }
+	public function handlePlayerConnect(Player $player) {
+		if ($this->notmuchplayers) {
+			if ($this->active) {
+				$this->initTimes($player);
+			}
+		}
 	}
 
-	public function handlePlayerDisconnect(Player $player)
-	{
-		if($this->active){
+	public function handlePlayerDisconnect(Player $player) {
+		if ($this->active) {
 			unset($this->spectateview[$player->login]);
 		}
 	}
@@ -280,58 +274,55 @@ class LocalRecordsCPLivePlugin implements CallbackListener, TimerListener, Plugi
 
 	}
 
-	public function handleBeginMapCallback()
-	{
-        if($this->notmuchplayers) {
-            if($this->active) {
-                $this->playersrecords = array();
-                $this->toprecord = array();
-                $players = $this->maniaControl->getPlayerManager()->getPlayers();
-                foreach ($players as $player) {
-                    $this->initTimes($player);
-                }
+	public function handleBeginMapCallback() {
+		if ($this->notmuchplayers) {
+			if ($this->active) {
+				$this->playersrecords = array();
+				$this->toprecord      = array();
+				$players              = $this->maniaControl->getPlayerManager()->getPlayers();
+				foreach ($players as $player) {
+					$this->initTimes($player);
+				}
 
-                if($this->dediactive) {
-                    //                Logger::log("Start get Dedimania Records");
-                    $this->topdedimania = $this->DedimaniaPlugin->getDedimaniaRecords();
+				if ($this->dediactive) {
+					//                Logger::log("Start get Dedimania Records");
+					$this->topdedimania = $this->DedimaniaPlugin->getDedimaniaRecords();
 
-                    //                if (isset($this->topdedimania[0]))
-                    //                    var_dump($this->topdedimania[0]->checkpoints);
-                }
+					//                if (isset($this->topdedimania[0]))
+					//                    var_dump($this->topdedimania[0]->checkpoints);
+				}
 
-                $this->currentPlayerCps = array();
+				$this->currentPlayerCps = array();
 
-            }
-        }
+			}
+		}
 	}
 
 
-	public function handleBeginRoundCallback()
-	{
+	public function handleBeginRoundCallback() {
 		//$this->initTimes($player);
 	}
 
-	public function handleEndMapCallback()
-	{
+	public function handleEndMapCallback() {
 		$this->playersrecords = array();
-		$this->toprecord = array();
+		$this->toprecord      = array();
 	}
 
-	public function handleFinishCallback(OnWayPointEventStructure $structure){
+	public function handleFinishCallback(OnWayPointEventStructure $structure) {
 
-        if($this->notmuchplayers) {
-            if($this->active){
-                $this->displayWidgets($structure, 1);
-                $player = $structure->getPlayer();
-                $this->maniaControl->getTimerManager()->registerOneTimeListening($this, function () use (&$player) {
-                    $this->initTimes($player);
-                }, 1000);
-                if(array_key_exists($structure->getPlayer()->login, $this->currentPlayerCps)) {
-                    unset($this->currentPlayerCps[$structure->getPlayer()->login]);
-                }
-                $this->currentPlayerCps[$structure->getPlayer()->login] = $structure->getPlainJsonObject()->curlapcheckpoints;
-            }
-        }
+		if ($this->notmuchplayers) {
+			if ($this->active) {
+				$this->displayWidgets($structure, 1);
+				$player = $structure->getPlayer();
+				$this->maniaControl->getTimerManager()->registerOneTimeListening($this, function () use (&$player) {
+					$this->initTimes($player);
+				}, 1000);
+				if (array_key_exists($structure->getPlayer()->login, $this->currentPlayerCps)) {
+					unset($this->currentPlayerCps[$structure->getPlayer()->login]);
+				}
+				$this->currentPlayerCps[$structure->getPlayer()->login] = $structure->getPlainJsonObject()->curlapcheckpoints;
+			}
+		}
 
 	}
 
@@ -342,22 +333,21 @@ class LocalRecordsCPLivePlugin implements CallbackListener, TimerListener, Plugi
 
 		// Display Local Records Checkpoints Live Widget
 
-        if($this->notmuchplayers) {
-            if($this->active){
-                if ($this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_LRCPLIVE_ACTIVATED)) {
-                    $this->displayLRCPLiveWidget($structure, $finish);
-                }
-            }
-        }
-
+		if ($this->notmuchplayers) {
+			if ($this->active) {
+				if ($this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_LRCPLIVE_ACTIVATED)) {
+					$this->displayLRCPLiveWidget($structure, $finish);
+				}
+			}
+		}
 
 	}
 
 	private function timeDifferenceWithColor($playerGapTime) {
 		if ($playerGapTime < 0) {
-			return "\$00f".Formatter::formatTime(-($playerGapTime));
+			return "\$00f" . Formatter::formatTime(-($playerGapTime));
 		} elseif ($playerGapTime > 0) {
-			return "\$f00".Formatter::formatTime($playerGapTime);
+			return "\$f00" . Formatter::formatTime($playerGapTime);
 		} else {
 			return "\$fff0";
 		}
@@ -372,31 +362,31 @@ class LocalRecordsCPLivePlugin implements CallbackListener, TimerListener, Plugi
 	public function playerCurrentCpsComparedHisBestLocal(array $chat, Player $player) {
 		$message = "\$f00Check that LOCAL record plugin is enabled, that there are local records and that you yourself have a local record!";
 
-		if($this->playersrecords && array_key_exists($player->login, $this->currentPlayerCps)) {
-			if(isset($this->playersrecords[$player->login])) {
-				$map            = $this->maniaControl->getMapManager()->getCurrentMap();
+		if ($this->playersrecords && array_key_exists($player->login, $this->currentPlayerCps)) {
+			if (isset($this->playersrecords[$player->login])) {
+				$map              = $this->maniaControl->getMapManager()->getCurrentMap();
 				$currentPlayerCps = $this->currentPlayerCps[$player->login];
-				$playerBestTime = $currentPlayerCps[sizeof($currentPlayerCps) - 1];
-				$currentPlayerCps = array_slice($currentPlayerCps, 0 , count($currentPlayerCps) - 1);
+				$playerBestTime   = $currentPlayerCps[sizeof($currentPlayerCps) - 1];
+				$currentPlayerCps = array_slice($currentPlayerCps, 0, count($currentPlayerCps) - 1);
 
-				if(isset($playerBestTime)) {
+				if (isset($playerBestTime)) {
 					$playerBestCps = $currentPlayerCps;
 
 					$topLocalTime = $this->LocalRecordsPlugin->getLocalRecord($map, $player)->time;
 					$topLocalCps  = explode(",", $this->LocalRecordsPlugin->getLocalRecord($map, $player)->checkpoints);
 
-					if(!empty($topLocalCps) && !empty($topLocalCps)) {
+					if (!empty($topLocalCps) && !empty($topLocalCps)) {
 						$message = "\$fffPrevious CPS to your best LOCAL: ";
-						for($i = 0; $i < count($playerBestCps); $i++) {
-							if(isset($playerBestCps[$i]) && isset($topLocalCps[$i])) {
+						for ($i = 0; $i < count($playerBestCps); $i++) {
+							if (isset($playerBestCps[$i]) && isset($topLocalCps[$i])) {
 								$playerGapTime = ($playerBestCps[$i] - intval($topLocalCps[$i]));
-								$message .= "\$fff[".($i + 1)."]".$this->timeDifferenceWithColor($playerGapTime)."\$fff, ";
+								$message       .= "\$fff[" . ($i + 1) . "]" . $this->timeDifferenceWithColor($playerGapTime) . "\$fff, ";
 							}
 						}
 
-						if(isset($topLocalTime) && isset($playerBestTime)) {
+						if (isset($topLocalTime) && isset($playerBestTime)) {
 							$playerGapTime = $playerBestTime - intval($topLocalTime);
-							$message .= "\$fff[F]".$this->timeDifferenceWithColor($playerGapTime)."\$fff.";
+							$message       .= "\$fff[F]" . $this->timeDifferenceWithColor($playerGapTime) . "\$fff.";
 						}
 					}
 				}
@@ -434,7 +424,7 @@ class LocalRecordsCPLivePlugin implements CallbackListener, TimerListener, Plugi
 						if (isset($playerBestCps[$i]) && isset($dediBestCps[$i])) {
 							$playerGapTime = $playerBestCps[$i] - $dediBestCps[$i];
 
-							$message .= "\$fff[" .($i + 1 ). "]" . $this->timeDifferenceWithColor($playerGapTime) . "\$fff, ";
+							$message .= "\$fff[" . ($i + 1) . "]" . $this->timeDifferenceWithColor($playerGapTime) . "\$fff, ";
 						}
 					}
 
@@ -463,8 +453,8 @@ class LocalRecordsCPLivePlugin implements CallbackListener, TimerListener, Plugi
 		if ($this->dediactive && $this->playersrecords && array_key_exists($player->login, $this->currentPlayerCps)) {
 			if (isset($this->playersrecords[$player->login])) {
 				$currentPlayerCps = $this->currentPlayerCps[$player->login];
-				$playerBestTime = $currentPlayerCps[sizeof($currentPlayerCps) - 1];
-				$currentPlayerCps = array_slice($currentPlayerCps, 0 , count($currentPlayerCps) - 1);
+				$playerBestTime   = $currentPlayerCps[sizeof($currentPlayerCps) - 1];
+				$currentPlayerCps = array_slice($currentPlayerCps, 0, count($currentPlayerCps) - 1);
 
 				$dediBestCps = array();
 				if (isset($this->topdedimania[0]->checkpoints)) {
@@ -478,7 +468,7 @@ class LocalRecordsCPLivePlugin implements CallbackListener, TimerListener, Plugi
 						if (isset($currentPlayerCps[$i]) && isset($dediBestCps[$i])) {
 							$playerGapTime = $currentPlayerCps[$i] - $dediBestCps[$i];
 
-							$message .= "\$fff[" .($i + 1 ). "]" . $this->timeDifferenceWithColor($playerGapTime) . "\$fff, ";
+							$message .= "\$fff[" . ($i + 1) . "]" . $this->timeDifferenceWithColor($playerGapTime) . "\$fff, ";
 						}
 					}
 
@@ -503,34 +493,34 @@ class LocalRecordsCPLivePlugin implements CallbackListener, TimerListener, Plugi
 	public function playerCurrentCpsComparedToLocal(array $chat, Player $player) {
 		$message = "\$f00Check that LOCAL record plugin is enabled, that there are local records and that you yourself have a local record!";
 
-		if($this->playersrecords && array_key_exists($player->login, $this->currentPlayerCps)) {
-			if(isset($this->playersrecords[$player->login])) {
+		if ($this->playersrecords && array_key_exists($player->login, $this->currentPlayerCps)) {
+			if (isset($this->playersrecords[$player->login])) {
 				$currentPlayerCps = $this->currentPlayerCps[$player->login];
-				$playerBestTime = $currentPlayerCps[sizeof($currentPlayerCps) - 1];
-				$currentPlayerCps = array_slice($currentPlayerCps, 0 , count($currentPlayerCps) - 1);
+				$playerBestTime   = $currentPlayerCps[sizeof($currentPlayerCps) - 1];
+				$currentPlayerCps = array_slice($currentPlayerCps, 0, count($currentPlayerCps) - 1);
 
-				if(isset($playerBestTime)) {
+				if (isset($playerBestTime)) {
 					$playerBestCps = $currentPlayerCps;
-					$topLocalCps = array();
-					$topLocalTime = "";
+					$topLocalCps   = array();
+					$topLocalTime  = "";
 
 					foreach ($this->toprecord as $toprecord) {
-						$topLocalCps = explode(",", $toprecord->checkpoints);
+						$topLocalCps  = explode(",", $toprecord->checkpoints);
 						$topLocalTime = explode(",", $toprecord->time);
 					}
 
-					if(count($topLocalCps) != 0 && count($playerBestCps) != 0) {
+					if (count($topLocalCps) != 0 && count($playerBestCps) != 0) {
 						$message = "\$fffPrevious CPS to LOCAL 1: ";
-						for($i = 0; $i < count($playerBestCps); $i++) {
-							if(isset($playerBestCps[$i]) && isset($topLocalCps[$i])) {
+						for ($i = 0; $i < count($playerBestCps); $i++) {
+							if (isset($playerBestCps[$i]) && isset($topLocalCps[$i])) {
 								$playerGapTime = ($playerBestCps[$i] - intval($topLocalCps[$i]));
-								$message .= "\$fff[".($i + 1)."]".$this->timeDifferenceWithColor($playerGapTime)."\$fff, ";
+								$message       .= "\$fff[" . ($i + 1) . "]" . $this->timeDifferenceWithColor($playerGapTime) . "\$fff, ";
 							}
 						}
 
-						if(isset($topLocalTime[0]) && isset($playerBestTime)) {
+						if (isset($topLocalTime[0]) && isset($playerBestTime)) {
 							$playerGapTime = $playerBestTime - intval($topLocalTime[0]);
-							$message .= "\$fff[F]".$this->timeDifferenceWithColor($playerGapTime)."\$fff.";
+							$message       .= "\$fff[F]" . $this->timeDifferenceWithColor($playerGapTime) . "\$fff.";
 						}
 					}
 				}
@@ -550,34 +540,34 @@ class LocalRecordsCPLivePlugin implements CallbackListener, TimerListener, Plugi
 	public function playerCpsComparedToLocal(array $chat, Player $player) {
 		$message = "\$f00Check that LOCAL record plugin is enabled, that there are local records and that you yourself have a local record!";
 
-		if($this->playersrecords) {
-			if(isset($this->playersrecords[$player->login])) {
-				$map = $this->maniaControl->getMapManager()->getCurrentMap();
+		if ($this->playersrecords) {
+			if (isset($this->playersrecords[$player->login])) {
+				$map            = $this->maniaControl->getMapManager()->getCurrentMap();
 				$playerBestTime = $this->LocalRecordsPlugin->getLocalRecord($map, $player)->time;
 
-				if(isset($playerBestTime)) {
-					$playerBestCps = explode(",",$this->LocalRecordsPlugin->getLocalRecord($map, $player)->checkpoints);
+				if (isset($playerBestTime)) {
+					$playerBestCps = explode(",", $this->LocalRecordsPlugin->getLocalRecord($map, $player)->checkpoints);
 
-					$topLocalCps = array();
+					$topLocalCps  = array();
 					$topLocalTime = "";
 
 					foreach ($this->toprecord as $toprecord) {
-						$topLocalCps = explode(",", $toprecord->checkpoints);
+						$topLocalCps  = explode(",", $toprecord->checkpoints);
 						$topLocalTime = explode(",", $toprecord->time);
 					}
 
-					if(count($topLocalCps) != 0 && count($playerBestCps) != 0) {
+					if (count($topLocalCps) != 0 && count($playerBestCps) != 0) {
 						$message = "\$fffCPS to LOCAL 1: ";
-						for($i = 0; $i < count($playerBestCps); $i++) {
-							if(isset($playerBestCps[$i]) && isset($topLocalCps[$i])) {
+						for ($i = 0; $i < count($playerBestCps); $i++) {
+							if (isset($playerBestCps[$i]) && isset($topLocalCps[$i])) {
 								$playerGapTime = intval($playerBestCps[$i]) - intval($topLocalCps[$i]);
-								$message .= "\$fff[".($i + 1)."]".$this->timeDifferenceWithColor($playerGapTime)."\$fff, ";
+								$message       .= "\$fff[" . ($i + 1) . "]" . $this->timeDifferenceWithColor($playerGapTime) . "\$fff, ";
 							}
 						}
 
-						if(isset($topLocalTime[0]) && isset($playerBestTime)) {
+						if (isset($topLocalTime[0]) && isset($playerBestTime)) {
 							$playerGapTime = $playerBestTime - intval($topLocalTime[0]);
-							$message .= "\$fff[F]".$this->timeDifferenceWithColor($playerGapTime)."\$fff.";
+							$message       .= "\$fff[F]" . $this->timeDifferenceWithColor($playerGapTime) . "\$fff.";
 						}
 					}
 				}
@@ -588,16 +578,14 @@ class LocalRecordsCPLivePlugin implements CallbackListener, TimerListener, Plugi
 
 	/**
 	 * Displays the LocalRecords Checkpoints Live Widget
-	 *
 	 */
-	public function displayLRCPLiveWidget(OnWayPointEventStructure $structure, $finish)
-	{
-		$pos1X = $this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_LRCPLIVE_WIDGET1_POSX);
-		$pos1Y = $this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_LRCPLIVE_WIDGET1_POSY);
-		$pos2X = $this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_LRCPLIVE_WIDGET2_POSX);
-		$pos2Y = $this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_LRCPLIVE_WIDGET2_POSY);
-		$pos3X = $this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_LRCPLIVE_WIDGET3_POSX);
-		$pos3Y = $this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_LRCPLIVE_WIDGET3_POSY);
+	public function displayLRCPLiveWidget(OnWayPointEventStructure $structure, $finish) {
+		$pos1X    = $this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_LRCPLIVE_WIDGET1_POSX);
+		$pos1Y    = $this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_LRCPLIVE_WIDGET1_POSY);
+		$pos2X    = $this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_LRCPLIVE_WIDGET2_POSX);
+		$pos2Y    = $this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_LRCPLIVE_WIDGET2_POSY);
+		$pos3X    = $this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_LRCPLIVE_WIDGET3_POSX);
+		$pos3Y    = $this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_LRCPLIVE_WIDGET3_POSY);
 		$textsize = $this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_LRCPLIVE_TEXT_SIZE);
 
 		$labelStyle = $this->maniaControl->getManialinkManager()->getStyleManager()->getDefaultLabelStyle();
@@ -605,13 +593,12 @@ class LocalRecordsCPLivePlugin implements CallbackListener, TimerListener, Plugi
 		$player = $structure->getPlayer();
 		if ($finish == 0) {
 
-			$checkpoint = $structure->getCheckPointInLap();
+			$checkpoint   = $structure->getCheckPointInLap();
 			$playercptime = $structure->getLapTime();
 
 			$playerbesttime = array();
-			if($this->playersrecords)
-			{
-				if(isset($this->playersrecords[$player->login])) {
+			if ($this->playersrecords) {
+				if (isset($this->playersrecords[$player->login])) {
 					$playerbesttime = explode(",", $this->playersrecords[$player->login]["checkpoints"]);
 				}
 			}
@@ -621,33 +608,34 @@ class LocalRecordsCPLivePlugin implements CallbackListener, TimerListener, Plugi
 			}
 
 			$deditime = array();
-			if($this->dediactive) {
-				if (isset($this->topdedimania[0]->checkpoints))
+			if ($this->dediactive) {
+				if (isset($this->topdedimania[0]->checkpoints)) {
 					$deditime = explode(",", $this->topdedimania[0]->checkpoints);
+				}
 			}
 
 			$playergaptime = 0;
 			if (isset($playerbesttime)) {
 				if (isset($playerbesttime[$checkpoint])) {
-				    if (is_numeric($playercptime) AND is_numeric($playerbesttime[$checkpoint])) {
-                        $playergaptime = $playercptime - $playerbesttime[$checkpoint];
-                    }
+					if (is_numeric($playercptime) AND is_numeric($playerbesttime[$checkpoint])) {
+						$playergaptime = $playercptime - $playerbesttime[$checkpoint];
+					}
 				}
 			}
 			$playertopgaptime = 0;
 			if (isset($toptime)) {
 				if (isset($toptime[$checkpoint])) {
-                    if (is_numeric($playercptime) AND is_numeric($toptime[$checkpoint])) {
-                        $playertopgaptime = $playercptime - $toptime[$checkpoint];
-                    }
+					if (is_numeric($playercptime) AND is_numeric($toptime[$checkpoint])) {
+						$playertopgaptime = $playercptime - $toptime[$checkpoint];
+					}
 				}
 			}
 			$playerdeditopgaptime = 0.1;
 			if (isset($deditime)) {
 				if (isset($deditime[$checkpoint])) {
-                    if (is_numeric($playercptime) AND is_numeric($deditime[$checkpoint])) {
-                        $playerdeditopgaptime = $playercptime - $deditime[$checkpoint];
-                    }
+					if (is_numeric($playercptime) AND is_numeric($deditime[$checkpoint])) {
+						$playerdeditopgaptime = $playercptime - $deditime[$checkpoint];
+					}
 				}
 			}
 
@@ -669,7 +657,7 @@ class LocalRecordsCPLivePlugin implements CallbackListener, TimerListener, Plugi
 			$playercptime = $structure->getLapTime();
 
 			$playerbesttime = 0;
-			if($this->playersrecords) {
+			if ($this->playersrecords) {
 				if (isset($this->playersrecords[$player->login])) {
 					$playerbesttime = $this->playersrecords[$player->login]["time"];
 				}
@@ -680,17 +668,18 @@ class LocalRecordsCPLivePlugin implements CallbackListener, TimerListener, Plugi
 				$toptime = $toprecord->time;
 			}
 			$deditime = 0;
-			if($this->dediactive) {
-				if (isset($this->topdedimania[0]->best))
+			if ($this->dediactive) {
+				if (isset($this->topdedimania[0]->best)) {
 					$deditime = $this->topdedimania[0]->best;
+				}
 			}
 
-			$playergaptime = $playercptime - $playerbesttime;
-			$playertopgaptime = $playercptime - $toptime;
+			$playergaptime        = $playercptime - $playerbesttime;
+			$playertopgaptime     = $playercptime - $toptime;
 			$playerdeditopgaptime = $playercptime - $deditime;
 
 			$notimeplayer = false;
-			if ($playerbesttime == 0 ) {
+			if ($playerbesttime == 0) {
 				$notimeplayer = true;
 			}
 			$notime = false;
@@ -726,16 +715,16 @@ class LocalRecordsCPLivePlugin implements CallbackListener, TimerListener, Plugi
 
 		$testdediok = $playerdeditopgaptime;
 
-		$playertopgaptime = Formatter::formatTime(abs($playertopgaptime));
+		$playertopgaptime     = Formatter::formatTime(abs($playertopgaptime));
 		$playerdeditopgaptime = Formatter::formatTime(abs($playerdeditopgaptime));
-		$playergaptime = Formatter::formatTime(abs($playergaptime));
+		$playergaptime        = Formatter::formatTime(abs($playergaptime));
 
 		$maniaLink = new ManiaLink(self::MLID_LRCPLIVE_WIDGET);
 
 		// mainframe
 		$frame = new Frame();
 		$maniaLink->addChild($frame);
-		if(!$notime) {
+		if (!$notime) {
 
 			$titleLabel = new Label();
 			$frame->addChild($titleLabel);
@@ -745,7 +734,7 @@ class LocalRecordsCPLivePlugin implements CallbackListener, TimerListener, Plugi
 			$titleLabel->setText("Top1: $" . $color1 . "" . $playertopgaptime);
 		}
 
-		if(!$notimeplayer) {
+		if (!$notimeplayer) {
 			$titleLabel = new Label();
 			$frame->addChild($titleLabel);
 			$titleLabel->setPosition($pos2X, $pos2Y);
@@ -753,7 +742,7 @@ class LocalRecordsCPLivePlugin implements CallbackListener, TimerListener, Plugi
 			$titleLabel->setTextSize($textsize);
 			$titleLabel->setText("Me: $" . $color2 . "" . $playergaptime);
 		}
-		if(!$nodeditime && $this->dediactive && $testdediok != 0.1) {
+		if (!$nodeditime && $this->dediactive && $testdediok != 0.1) {
 			$titleLabel = new Label();
 			$frame->addChild($titleLabel);
 			$titleLabel->setPosition($pos3X, $pos3Y);
@@ -762,12 +751,12 @@ class LocalRecordsCPLivePlugin implements CallbackListener, TimerListener, Plugi
 			$titleLabel->setText("Top1Dedi: $" . $color3 . "" . $playerdeditopgaptime);
 		}
 
-		if($this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_LRCPLIVE_SHOWPLAYERS)) {
+		if ($this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_LRCPLIVE_SHOWPLAYERS)) {
 			// Send manialink
 			$this->maniaControl->getManialinkManager()->sendManialink($maniaLink, $player->login);
 		}
 
-		if($this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_LRCPLIVE_SHOWSPECTATORS)) {
+		if ($this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_LRCPLIVE_SHOWSPECTATORS)) {
 			//Send to spectators
 
 			foreach ($this->spectateview as $spectatorlogin => $targetId) {
@@ -780,15 +769,15 @@ class LocalRecordsCPLivePlugin implements CallbackListener, TimerListener, Plugi
 		}
 	}
 
-	public function handleCheckpointCallback(OnWayPointEventStructure $structure){
+	public function handleCheckpointCallback(OnWayPointEventStructure $structure) {
 
 		//        Logger::log("CP Start");
-        if($this->notmuchplayers) {
-            if($this->active){
-                //            Logger::log("CP Start");
-                $this->displayWidgets($structure);
-            }
-        }
+		if ($this->notmuchplayers) {
+			if ($this->active) {
+				//            Logger::log("CP Start");
+				$this->displayWidgets($structure);
+			}
+		}
 	}
 
 	/**
@@ -806,7 +795,7 @@ class LocalRecordsCPLivePlugin implements CallbackListener, TimerListener, Plugi
 	 * @param string $widgetId
 	 */
 	public function closeWidget($widgetId, $login = null) {
-		$this->maniaControl->getManialinkManager()->hideManialink($widgetId,$login);
+		$this->maniaControl->getManialinkManager()->hideManialink($widgetId, $login);
 	}
 
 	/**

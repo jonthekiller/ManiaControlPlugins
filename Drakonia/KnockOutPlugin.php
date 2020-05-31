@@ -31,7 +31,7 @@ use Maniaplanet\DedicatedServer\Xmlrpc\Exception;
 class KnockOutPlugin implements ManialinkPageAnswerListener, CallbackListener, CommandListener, TimerListener, CommunicationListener, Plugin {
 
 	const PLUGIN_ID      = 125;
-	const PLUGIN_VERSION = 0.35;
+	const PLUGIN_VERSION = 0.36;
 	const PLUGIN_NAME    = 'KnockOutPlugin';
 	const PLUGIN_AUTHOR  = 'jonthekiller';
 
@@ -129,31 +129,31 @@ class KnockOutPlugin implements ManialinkPageAnswerListener, CallbackListener, C
 		$this->maniaControl = $maniaControl;
 
 		//Settings
-		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_KNOCKOUT_ACTIVATED, true);
-		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_KNOCKOUT_WIDGET_ACTIVATED, true);
-		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_KNOCKOUT_SPEC_OR_KICK, array('Spec', 'Kick'));
+		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_KNOCKOUT_ACTIVATED, true, "Activate the plugin");
+		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_KNOCKOUT_WIDGET_ACTIVATED, true, "Activate the widget");
+		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_KNOCKOUT_SPEC_OR_KICK, array('Spec', 'Kick'), "Force Spec or Kick player if eliminated");
 
-		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_KNOCKOUT_ALLOWREPASWN, true);
-		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_KNOCKOUT_DURATIONWARMUP, 10);
-		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_KNOCKOUT_MAPLIST, "Drakonia_KO.txt");
-		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_KNOCKOUT_ROUNDSPERMAP, 4);
-		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_KNOCKOUT_FINISHTIMEOUT, 10);
-		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_KNOCKOUT_SHUFFLEMAPS, true);
-		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_KNOCKOUT_PLAYER_PASSWORD, "KODrakonia");
-		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_KNOCKOUT_SPECTATOR_PASSWORD, "KODrakonia");
-		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_KNOCKOUT_NBLIFES, 1);
-		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_KNOCKOUT_LINE_HEIGHT, 4);
-		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_KNOCKOUT_LINESCOUNT, 20);
-		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_KNOCKOUT_POSX, -139);
-		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_KNOCKOUT_POSY, 70);
-		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_KNOCKOUT_WIDTH, 42);
+		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_KNOCKOUT_ALLOWREPASWN, true, "Allow Respawn");
+		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_KNOCKOUT_DURATIONWARMUP, 10, "Warm-Up Duration in seconds");
+		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_KNOCKOUT_MAPLIST, "Drakonia_KO.txt", "Matchsettings file to load (file with the list of maps)");
+		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_KNOCKOUT_ROUNDSPERMAP, 4, "Number of rounds per map");
+		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_KNOCKOUT_FINISHTIMEOUT, 10, "Finish Timeout (Time after the first finished)");
+		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_KNOCKOUT_SHUFFLEMAPS, true, "Shuffle maps order");
+		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_KNOCKOUT_PLAYER_PASSWORD, "KODrakonia", "Server password for players when KO is in progress");
+		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_KNOCKOUT_SPECTATOR_PASSWORD, "KODrakonia", "Server password for spectators when KO is in progress");
+		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_KNOCKOUT_NBLIFES, 1, "Number of lives for each players at the start of the KO");
+		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_KNOCKOUT_LINE_HEIGHT, 4, "Height of a player line in the widget");
+		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_KNOCKOUT_LINESCOUNT, 20, "Number of players to display in the widget");
+		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_KNOCKOUT_POSX, -139, "Position of the widget (on X axis)");
+		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_KNOCKOUT_POSY, 70, "Position of the widget (on Y axis)");
+		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_KNOCKOUT_WIDTH, 42, "Width of the widget");
 
-		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTINGS_KNOCKOUT_MOVE_RACE_RANKING, true);
-		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTINGS_KNOCKOUT_MOVE_RACE_RANKING_X, 100);
-		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTINGS_KNOCKOUT_MOVE_RACE_RANKING_Y, 50);
-		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTINGS_KNOCKOUT_MOVE_RACE_RANKING_Z, 150);
+		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTINGS_KNOCKOUT_MOVE_RACE_RANKING, true, "Move Nadeo Race Ranking widget (displayed at the end of the round)");
+		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTINGS_KNOCKOUT_MOVE_RACE_RANKING_X, 100, "Position of the Race Ranking widget (on X axis)");
+		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTINGS_KNOCKOUT_MOVE_RACE_RANKING_Y, 50, "Position of the Race Ranking widget (on Y axis)");
+		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTINGS_KNOCKOUT_MOVE_RACE_RANKING_Z, 150, "Position of the Race Ranking widget (on Z axis)");
 
-				$this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_KNOCKOUT_AUTHLEVEL, AuthenticationManager::AUTH_LEVEL_ADMIN);
+				$this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_KNOCKOUT_AUTHLEVEL, AuthenticationManager::getPermissionLevelNameArray(AuthenticationManager::AUTH_LEVEL_ADMIN), "Admin level needed to use the plugin");
 
 
 		$this->maniaControl->getCallbackManager()->registerCallbackListener(SettingManager::CB_SETTING_CHANGED, $this, 'updateSettings');
@@ -200,7 +200,7 @@ class KnockOutPlugin implements ManialinkPageAnswerListener, CallbackListener, C
 
 	public function onCommandKOStart(array $chatCallback, Player $player) {
 		$authLevel = $this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_KNOCKOUT_AUTHLEVEL);
-		if (!$this->maniaControl->getAuthenticationManager()->checkRight($player, $authLevel)) {
+		if (!$this->maniaControl->getAuthenticationManager()->checkRight($player, AuthenticationManager::getAuthLevel($authLevel))) {
 			$this->maniaControl->getAuthenticationManager()->sendNotAllowed($player);
 
 			return;
@@ -210,7 +210,7 @@ class KnockOutPlugin implements ManialinkPageAnswerListener, CallbackListener, C
 
 	public function onCommandKOStop(array $chatCallback, Player $player) {
 		$authLevel = $this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_KNOCKOUT_AUTHLEVEL);
-		if (!$this->maniaControl->getAuthenticationManager()->checkRight($player, $authLevel)) {
+		if (!$this->maniaControl->getAuthenticationManager()->checkRight($player, AuthenticationManager::getAuthLevel($authLevel))) {
 			$this->maniaControl->getAuthenticationManager()->sendNotAllowed($player);
 
 			return;
@@ -220,7 +220,7 @@ class KnockOutPlugin implements ManialinkPageAnswerListener, CallbackListener, C
 
 	public function onCommandKOAddLives(array $chatCallback, Player $player) {
 		$authLevel = $this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_KNOCKOUT_AUTHLEVEL);
-		if (!$this->maniaControl->getAuthenticationManager()->checkRight($player, $authLevel)) {
+		if (!$this->maniaControl->getAuthenticationManager()->checkRight($player, AuthenticationManager::getAuthLevel($authLevel))) {
 			$this->maniaControl->getAuthenticationManager()->sendNotAllowed($player);
 
 			return;
@@ -244,7 +244,7 @@ class KnockOutPlugin implements ManialinkPageAnswerListener, CallbackListener, C
 
 	public function onCommandKORemoveLives(array $chatCallback, Player $player) {
 		$authLevel = $this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_KNOCKOUT_AUTHLEVEL);
-		if (!$this->maniaControl->getAuthenticationManager()->checkRight($player, $authLevel)) {
+		if (!$this->maniaControl->getAuthenticationManager()->checkRight($player, AuthenticationManager::getAuthLevel($authLevel))) {
 			$this->maniaControl->getAuthenticationManager()->sendNotAllowed($player);
 
 			return;
@@ -293,7 +293,7 @@ class KnockOutPlugin implements ManialinkPageAnswerListener, CallbackListener, C
 				$this->maniaControl->getChat()->sendChat("$0f0KO match start!");
 				Logger::log("KO match start!");
 
-				$loadedSettings = array("S_PointsLimit"                       => 99999, "S_WarmUpNb" => 1, "S_MapsPerMatch" => 9999,
+				$loadedSettings = array("S_PointsLimit"                       => 999999, "S_WarmUpNb" => 1, "S_MapsPerMatch" => 9999,
 				                        self::SETTING_KNOCKOUT_ROUNDSPERMAP   => (int) $this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_KNOCKOUT_ROUNDSPERMAP),
 				                        self::SETTING_KNOCKOUT_ALLOWREPASWN   => (boolean) $this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_KNOCKOUT_ALLOWREPASWN),
 				                        self::SETTING_KNOCKOUT_DURATIONWARMUP => (int) $this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_KNOCKOUT_DURATIONWARMUP),
