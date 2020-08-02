@@ -26,7 +26,7 @@ class LocalRecordsCPLivePlugin implements CallbackListener, TimerListener, Plugi
 	* Constants
 	*/
 	const PLUGIN_ID      = 115;
-	const PLUGIN_VERSION = 0.37;
+	const PLUGIN_VERSION = 2.0;
 	const PLUGIN_NAME    = 'LocalRecordsCPLivePlugin';
 	const PLUGIN_AUTHOR  = 'jonthekiller, Jaka Vrhovec';
 
@@ -60,6 +60,7 @@ class LocalRecordsCPLivePlugin implements CallbackListener, TimerListener, Plugi
 	private $playersrecords     = array();
 	private $spectateview       = array();
 	private $topdedimania       = array();
+	private $isTrackmania       = false;
 
 	private $currentPlayerCps = array();
 
@@ -120,8 +121,6 @@ class LocalRecordsCPLivePlugin implements CallbackListener, TimerListener, Plugi
 		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_LRCPLIVE_WIDGET1_POSY, 70, "Position of Top1 message (on Y axis)");
 		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_LRCPLIVE_WIDGET2_POSX, 45, "Position of Player message (on X axis)");
 		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_LRCPLIVE_WIDGET2_POSY, 70, "Position of Player message (on Y axis)");
-		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_LRCPLIVE_WIDGET3_POSX, 0, "Position of Dedi1 message (on X axis)");
-		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_LRCPLIVE_WIDGET3_POSY, 70, "Position of Dedi1 message (on Y axis)");
 		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_LRCPLIVE_SHOWPLAYERS, true, "Display widget for players");
 		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_LRCPLIVE_SHOWSPECTATORS, true, "Display widget for spectators");
 		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_LRCPLIVE_MAXNUMBERPLAYERS, 100, "Disable the widget if more than X players (performance)");
@@ -141,13 +140,22 @@ class LocalRecordsCPLivePlugin implements CallbackListener, TimerListener, Plugi
 		$this->maniaControl->getCallbackManager()->registerCallbackListener(PlayerManager::CB_PLAYERINFOCHANGED, $this, 'handlePlayerInfoChanged');
 		$this->maniaControl->getCallbackManager()->registerCallbackListener(Callbacks::ENDMAP, $this, 'handleEndMapCallback');
 
-		$this->maniaControl->getCommandManager()->registerCommandListener('cpdedi', $this, 'playerCpsComparedToDedi', false, 'Writes player cps compared to dedi1 time');
 		$this->maniaControl->getCommandManager()->registerCommandListener('cplocal', $this, 'playerCpsComparedToLocal', false, 'Writes player cps compared to local1 time');
 		$this->maniaControl->getCommandManager()->registerCommandListener('cplocalprev', $this, 'playerCurrentCpsComparedToLocal', false, 'Writes player current cps compared to local1 time');
-		$this->maniaControl->getCommandManager()->registerCommandListener('cpdediprev', $this, 'playerCurrentCpsComparedToDedi', false, 'Writes player current cps compared to dedi1 time');
 		$this->maniaControl->getCommandManager()->registerCommandListener('cpme', $this, 'playerCurrentCpsComparedHisBestLocal', false, 'Writes player current cps compared to his local1');
 
 		$this->init();
+
+		if($this->maniaControl->getServer()->titleId == "Trackmania")
+		{
+			$this->isTrackmania = true;
+		}else{
+			$this->maniaControl->getCommandManager()->registerCommandListener('cpdediprev', $this, 'playerCurrentCpsComparedToDedi', false, 'Writes player current cps compared to dedi1 time');
+			$this->maniaControl->getCommandManager()->registerCommandListener('cpdedi', $this, 'playerCpsComparedToDedi', false, 'Writes player cps compared to dedi1 time');
+			$this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_LRCPLIVE_WIDGET3_POSX, 0, "Position of Dedi1 message (on X axis)");
+			$this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_LRCPLIVE_WIDGET3_POSY, 70, "Position of Dedi1 message (on Y axis)");
+
+		}
 
 		return true;
 
@@ -163,7 +171,7 @@ class LocalRecordsCPLivePlugin implements CallbackListener, TimerListener, Plugi
 			if ($numberplayers < ($this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_LRCPLIVE_MAXNUMBERPLAYERS) + 1)) {
 				$this->notmuchplayers     = true;
 				$this->LocalRecordsPlugin = $this->maniaControl->getPluginManager()->getPlugin(self::DEFAULT_LOCALRECORDS_PLUGIN);
-				$this->DedimaniaPlugin    = $this->maniaControl->getPluginManager()->getPlugin(self::DEFAULT_DEDIMANIA_PLUGIN);
+
 
 				if ($this->LocalRecordsPlugin) {
 					$this->active = true;
@@ -172,11 +180,14 @@ class LocalRecordsCPLivePlugin implements CallbackListener, TimerListener, Plugi
 					$this->maniaControl->getChat()->sendErrorToAdmins('Please activate first the LocalRecords plugin');
 				}
 
-				if ($this->DedimaniaPlugin) {
-					$this->dediactive = true;
-					Logger::log("Can load LRCPLive Dedimania plugin");
-				} else {
-					$this->maniaControl->getChat()->sendErrorToAdmins('Please activate first the Dedimania plugin');
+				if ($this->isTrackmania == false) {
+					$this->DedimaniaPlugin    = $this->maniaControl->getPluginManager()->getPlugin(self::DEFAULT_DEDIMANIA_PLUGIN);
+					if ($this->DedimaniaPlugin) {
+						$this->dediactive = true;
+						Logger::log("Can load LRCPLive Dedimania plugin");
+					} else {
+						$this->maniaControl->getChat()->sendErrorToAdmins('Please activate first the Dedimania plugin');
+					}
 				}
 
 				$players = $this->maniaControl->getPlayerManager()->getPlayers();

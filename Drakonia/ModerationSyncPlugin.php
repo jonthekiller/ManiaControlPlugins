@@ -41,7 +41,7 @@ class ModerationSyncPlugin implements CallbackListener, TimerListener, CommandLi
 * Constants
 */
 	const PLUGIN_ID      = 130;
-	const PLUGIN_VERSION = 0.91;
+	const PLUGIN_VERSION = 0.92;
 	const PLUGIN_NAME    = 'ModerationSyncPlugin';
 	const PLUGIN_AUTHOR  = 'jonthekiller';
 
@@ -67,6 +67,7 @@ class ModerationSyncPlugin implements CallbackListener, TimerListener, CommandLi
 	private $playerslist  = array();
 
 	/**
+	 * @param \ManiaControl\ManiaControl $maniaControl
 	 * @see \ManiaControl\Plugins\Plugin::prepare()
 	 */
 	public static function prepare(ManiaControl $maniaControl) {
@@ -108,6 +109,8 @@ class ModerationSyncPlugin implements CallbackListener, TimerListener, CommandLi
 	}
 
 	/**
+	 * @param \ManiaControl\ManiaControl $maniaControl
+	 * @return bool
 	 * @see \ManiaControl\Plugins\Plugin::load()
 	 */
 	public function load(ManiaControl $maniaControl) {
@@ -653,8 +656,10 @@ class ModerationSyncPlugin implements CallbackListener, TimerListener, CommandLi
 		$mysqli->query($query);
 		if ($mysqli->error) {
 			trigger_error($mysqli->error);
+			$this->maniaControl->getChat()->sendErrorToAdmins("Error");
 			return null;
 		}
+		$this->maniaControl->getChat()->sendSuccessToAdmins("Player " . $playerlogin . " is banned!");
 	}
 
 
@@ -672,8 +677,10 @@ class ModerationSyncPlugin implements CallbackListener, TimerListener, CommandLi
 		$mysqli->query($query);
 		if ($mysqli->error) {
 			trigger_error($mysqli->error);
+			$this->maniaControl->getChat()->sendErrorToAdmins("Error");
 			return null;
 		}
+		$this->maniaControl->getChat()->sendSuccessToAdmins("Player " . $playerlogin . " is muted!");
 	}
 
 

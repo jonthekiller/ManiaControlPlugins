@@ -37,7 +37,7 @@ class MatchWidgetPlugin implements ManialinkPageAnswerListener, CallbackListener
 	 * Constants
 	 */
 	const PLUGIN_ID      = 127;
-	const PLUGIN_VERSION = 0.52;
+	const PLUGIN_VERSION = 2.0;
 	const PLUGIN_NAME    = 'MatchWidgetPlugin';
 	const PLUGIN_AUTHOR  = 'jonthekiller';
 
@@ -74,7 +74,7 @@ class MatchWidgetPlugin implements ManialinkPageAnswerListener, CallbackListener
 	// $ranking = array ($playerlogin, $nbCPs, $CPTime)
 	private $ranking = array();
 	// Gamemodes supported by the plugin
-	private $gamemodes   = array("Cup.Script.txt", "Rounds.Script.txt", "Team.Script.txt");
+	private $gamemodes   = array("Cup.Script.txt", "Rounds.Script.txt", "Team.Script.txt", "Trackmania/TM_Rounds_Online.Script.txt", "Trackmania/TM_Cup_Online.Script.txt");
 	private $script      = array();
 	private $active      = false;
 	public  $matchPlugin = "";
@@ -148,8 +148,6 @@ class MatchWidgetPlugin implements ManialinkPageAnswerListener, CallbackListener
 
 		// Settings
 		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_MATCHWIDGET_LIVE_ACTIVATED, true, "Active the widget");
-		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTINGS_MATCHWIDGET_MOVE_RACE_RANKING, false, "Move Nadeo Race Ranking widget (displayed at the end of the round)");
-		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTINGS_MATCHWIDGET_HIDE_SPEC, true, "Hide Spectator icon for players");
 		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_MATCHWIDGET_SHOWPLAYERS, true, "Display widget for players");
 		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_MATCHWIDGET_SHOWSPECTATORS, true, "Display widget for spectators");
 		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_MATCHWIDGET_LIVE_POSX, -139, "Position of the widget (on X axis)");
@@ -158,15 +156,27 @@ class MatchWidgetPlugin implements ManialinkPageAnswerListener, CallbackListener
 		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_MATCHWIDGET_LIVE_WIDTH, 42, "Width of the widget");
 		//        $this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_MATCHWIDGET_LIVE_HEIGHT, 25);
 		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_MATCHWIDGET_LIVE_LINE_HEIGHT, 4, "Height of a player line");
-		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTINGS_MATCHWIDGET_MOVE_RACE_RANKING_X, 100, "Position of the Race Ranking widget (on X axis)");
-		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTINGS_MATCHWIDGET_MOVE_RACE_RANKING_Y, 50, "Position of the Race Ranking widget (on Y axis)");
-		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTINGS_MATCHWIDGET_MOVE_RACE_RANKING_Z, 150, "Position of the Race Ranking widget (on Z axis)");
-		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTINGS_MATCHWIDGET_COUNTDOWN_POS, '153 -7 5', "Position of the Countdown (X Y Z)");
-		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTINGS_MATCHWIDGET_COUNTDOWN_SIZE, 1, "Size of the Countdown");
-		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTINGS_MATCHWIDGET_MOVE_COUNTDOWN, false, "Move Countdown");
+
+		if ($this->maniaControl->getServer()->titleId != "Trackmania") {
+			$this->maniaControl->getSettingManager()->initSetting($this, self::SETTINGS_MATCHWIDGET_HIDE_SPEC, true, "Hide Spectator icon for players");
+			$this->maniaControl->getSettingManager()->initSetting($this, self::SETTINGS_MATCHWIDGET_MOVE_RACE_RANKING, false, "Move Nadeo Race Ranking widget (displayed at the end of the round)");
+			$this->maniaControl->getSettingManager()->initSetting($this, self::SETTINGS_MATCHWIDGET_MOVE_RACE_RANKING_X, 100, "Position of the Race Ranking widget (on X axis)");
+			$this->maniaControl->getSettingManager()->initSetting($this, self::SETTINGS_MATCHWIDGET_MOVE_RACE_RANKING_Y, 50, "Position of the Race Ranking widget (on Y axis)");
+			$this->maniaControl->getSettingManager()->initSetting($this, self::SETTINGS_MATCHWIDGET_MOVE_RACE_RANKING_Z, 150, "Position of the Race Ranking widget (on Z axis)");
+			$this->maniaControl->getSettingManager()->initSetting($this, self::SETTINGS_MATCHWIDGET_COUNTDOWN_POS, '153 -7 5', "Position of the Countdown (X Y Z)");
+			$this->maniaControl->getSettingManager()->initSetting($this, self::SETTINGS_MATCHWIDGET_COUNTDOWN_SIZE, 1, "Size of the Countdown");
+			$this->maniaControl->getSettingManager()->initSetting($this, self::SETTINGS_MATCHWIDGET_MOVE_COUNTDOWN, false, "Move Countdown");
+
+			$this->moveRaceRanking();
+
+			$this->hideSpecIcon();
+
+			$this->moveCountdown();
+		}
 
 		$script       = $this->maniaControl->getClient()->getScriptName();
 		$this->script = $script['CurrentValue'];
+//		var_dump($this->script);
 		if (in_array($this->script, $this->gamemodes)) {
 			$this->active = true;
 		} else {
@@ -178,11 +188,7 @@ class MatchWidgetPlugin implements ManialinkPageAnswerListener, CallbackListener
 
 		$this->displayWidgets();
 
-		$this->moveRaceRanking();
 
-		$this->hideSpecIcon();
-
-		$this->moveCountdown();
 
 		return true;
 	}
@@ -414,8 +420,10 @@ class MatchWidgetPlugin implements ManialinkPageAnswerListener, CallbackListener
 			//$this->updateWidget($this->ranking);
 		}
 
-		$this->moveRaceRanking();
-		$this->hideSpecIcon();
+		if ($this->maniaControl->getServer()->titleId != "Trackmania") {
+			$this->moveRaceRanking();
+			$this->hideSpecIcon();
+		}
 	}
 
 	public function handleBeginWarmUpCallback() {
@@ -440,6 +448,7 @@ class MatchWidgetPlugin implements ManialinkPageAnswerListener, CallbackListener
 			$this->ranking  = array();
 			$results        = $structure->getPlayerScores();
 
+
 			$pointsrepartition[0] = 10;
 
 			if ($this->matchPlugin) {
@@ -448,6 +457,7 @@ class MatchWidgetPlugin implements ManialinkPageAnswerListener, CallbackListener
 			}
 
 			foreach ($results as $result) {
+
 				$login  = $result->getPlayer()->login;
 				$rank   = $result->getRank();
 				$player = $result->getPlayer();
@@ -455,7 +465,7 @@ class MatchWidgetPlugin implements ManialinkPageAnswerListener, CallbackListener
 				if (($player->isSpectator && $result->getMatchPoints() == 0) || ($player->isFakePlayer() && $result->getMatchPoints() == 0)) {
 				} else {
 
-					if ($this->script == "Cup.Script.txt") {
+					if ($this->script == "Cup.Script.txt" OR $this->script == "Trackmania/TM_Cup_Online.Script.txt") {
 						$roundpoints = $result->getRoundPoints();
 						$points      = $result->getMatchPoints();
 
@@ -477,14 +487,16 @@ class MatchWidgetPlugin implements ManialinkPageAnswerListener, CallbackListener
 						}
 
 
-					} elseif ($this->script == "Rounds.Script.txt") {
+					} elseif ($this->script == "Rounds.Script.txt" OR $this->script == "Trackmania/TM_Rounds_Online.Script.txt") {
 						$roundpoints = $result->getRoundPoints();
 						$points      = $result->getMatchPoints();
-
+//						Logger::log($login);
+//						                            Logger::log($roundpoints);
+//						                            Logger::log($points);
 						$this->ranking[] = array("login" => $login, "points" => ($points + $roundpoints), "finalist" => 0, "rank" => $rank);
 
 
-					}elseif ($this->script == "Team.Script.txt") {
+					}elseif ($this->script == "Team.Script.txt" OR $this->script == "Trackmania/TM_Team_Online.Script.txt") {
 						$roundpoints = $result->getRoundPoints();
 						$points      = $result->getMatchPoints();
 
@@ -501,6 +513,7 @@ class MatchWidgetPlugin implements ManialinkPageAnswerListener, CallbackListener
 
 		}
 
+//		var_dump($this->ranking);
 		$this->updateWidget($this->ranking);
 	}
 
@@ -570,9 +583,12 @@ class MatchWidgetPlugin implements ManialinkPageAnswerListener, CallbackListener
 	public function updateSettings(Setting $setting) {
 		if ($setting->belongsToClass($this)) {
 			$this->displayWidgets();
-			$this->moveRaceRanking();
-			$this->hideSpecIcon();
-			$this->moveCountdown();
+			if ($this->maniaControl->getServer()->titleId != "Trackmania") {
+				$this->moveRaceRanking();
+				$this->hideSpecIcon();
+				$this->moveCountdown();
+			}
+
 		}
 	}
 

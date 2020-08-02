@@ -37,7 +37,7 @@ class CheckpointsLivePlugin implements ManialinkPageAnswerListener, CallbackList
 	 * Constants
 	 */
 	const PLUGIN_ID      = 111;
-	const PLUGIN_VERSION = 0.93;
+	const PLUGIN_VERSION = 2.0;
 	const PLUGIN_NAME    = 'CheckpointsLivePlugin';
 	const PLUGIN_AUTHOR  = 'jonthekiller';
 
@@ -68,7 +68,7 @@ class CheckpointsLivePlugin implements ManialinkPageAnswerListener, CallbackList
 	// $ranking = array ($playerlogin, $nbCPs, $CPTime)
 	private $ranking = array();
 	// Gamemodes supported by the plugin
-	private $gamemodes = array("Cup.Script.txt", "Rounds.Script.txt", "Team.Script.txt", "Laps.Script.txt", "Champion.Script.txt");
+	private $gamemodes = array("Cup.Script.txt", "Rounds.Script.txt", "Team.Script.txt", "Laps.Script.txt", "Champion.Script.txt", "Trackmania/TM_Rounds_Online.Script.txt", "Trackmania/TM_Cup_Online.Script.txt");
 	private $script    = array();
 	private $active    = false;
 	private $nbCPs     = 0;
@@ -156,9 +156,11 @@ class CheckpointsLivePlugin implements ManialinkPageAnswerListener, CallbackList
 		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_CHECKPOINTS_LIVE_LINE_HEIGHT, 4, "Height of a player line");
 
 		//        $this->maniaControl->getSettingManager()->initSetting($this, self::SETTINGS_MATCHWIDGET_HIDE_RACE_RANKING, true);
-		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTINGS_MATCHWIDGET_HIDE_SPEC, true, "Hide the Spectator icon for players");
-		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_CHECKPOINTS_LIVE_CHANGE_POSITION, false, "Display the icon when a player earn of lose a position (beta)");
-
+		if ($this->maniaControl->getServer()->titleId != "Trackmania") {
+			$this->maniaControl->getSettingManager()->initSetting($this, self::SETTINGS_MATCHWIDGET_HIDE_SPEC, true, "Hide the Spectator icon for players");
+			$this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_CHECKPOINTS_LIVE_CHANGE_POSITION, false, "Display the icon when a player earn of lose a position (beta)");
+			$this->hideSpecIcon();
+		}
 		$script       = $this->maniaControl->getClient()->getScriptName();
 		$this->script = $script['CurrentValue'];
 		if (in_array($this->script, $this->gamemodes)) {
@@ -171,7 +173,7 @@ class CheckpointsLivePlugin implements ManialinkPageAnswerListener, CallbackList
 
 		//        $this->hideRaceRanking();
 
-		$this->hideSpecIcon();
+
 
 
 		return true;
@@ -853,7 +855,7 @@ class CheckpointsLivePlugin implements ManialinkPageAnswerListener, CallbackList
     <round_scores visible='false' />
     <chat_avatar visible='false' />
   </ui_properties>";
-			Logger::log('Hide Race Ranking Widget');
+//			Logger::log('Hide Race Ranking Widget');
 			$this->maniaControl->getModeScriptEventManager()->setTrackmaniaUIProperties($properties);
 
 		} else {
@@ -861,7 +863,7 @@ class CheckpointsLivePlugin implements ManialinkPageAnswerListener, CallbackList
     <round_scores pos='-158.5 40. 150.' visible='true' />
     <chat_avatar visible='true' />
   </ui_properties>";
-			Logger::log('Show Race Ranking Widget');
+//			Logger::log('Show Race Ranking Widget');
 			$this->maniaControl->getModeScriptEventManager()->setTrackmaniaUIProperties($properties);
 
 		}
@@ -871,14 +873,14 @@ class CheckpointsLivePlugin implements ManialinkPageAnswerListener, CallbackList
 		if ($this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTINGS_MATCHWIDGET_HIDE_SPEC)) {
 			$properties = "<ui_properties><viewers_count visible='false'/></ui_properties>";
 
-			Logger::log('Hide Spec Icon');
+//			Logger::log('Hide Spec Icon');
 			$this->maniaControl->getModeScriptEventManager()->setTrackmaniaUIProperties($properties);
 
 		} else {
 			$properties = "<ui_properties>
     <viewers_count visible='true' pos='157. -40. 5.\' />
   </ui_properties>";
-			Logger::log('Show Spec Icon');
+//			Logger::log('Show Spec Icon');
 			$this->maniaControl->getModeScriptEventManager()->setTrackmaniaUIProperties($properties);
 
 		}
