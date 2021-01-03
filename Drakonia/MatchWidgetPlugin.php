@@ -74,7 +74,7 @@ class MatchWidgetPlugin implements ManialinkPageAnswerListener, CallbackListener
 	// $ranking = array ($playerlogin, $nbCPs, $CPTime)
 	private $ranking = array();
 	// Gamemodes supported by the plugin
-	private $gamemodes   = array("Cup.Script.txt", "Rounds.Script.txt", "Team.Script.txt", "Trackmania/TM_Rounds_Online.Script.txt", "Trackmania/TM_Cup_Online.Script.txt");
+	private $gamemodes   = array("Cup.Script.txt", "Rounds.Script.txt", "Team.Script.txt", "Trackmania/TM_Rounds_Online.Script.txt", "Trackmania/TM_Cup_Online.Script.txt", "Trackmania/TM_Cup_Online.Script.txt");
 	private $script      = array();
 	private $active      = false;
 	public  $matchPlugin = "";
@@ -496,7 +496,7 @@ class MatchWidgetPlugin implements ManialinkPageAnswerListener, CallbackListener
 						$this->ranking[] = array("login" => $login, "points" => ($points + $roundpoints), "finalist" => 0, "rank" => $rank);
 
 
-					}elseif ($this->script == "Team.Script.txt" OR $this->script == "Trackmania/TM_Team_Online.Script.txt") {
+					}elseif ($this->script == "Team.Script.txt" OR $this->script == "Trackmania/TM_Teams_Online.Script.txt") {
 						$roundpoints = $result->getRoundPoints();
 						$points      = $result->getMatchPoints();
 

@@ -37,7 +37,7 @@ class CheckpointsLivePlugin implements ManialinkPageAnswerListener, CallbackList
 	 * Constants
 	 */
 	const PLUGIN_ID      = 111;
-	const PLUGIN_VERSION = 2.0;
+	const PLUGIN_VERSION = 2.1;
 	const PLUGIN_NAME    = 'CheckpointsLivePlugin';
 	const PLUGIN_AUTHOR  = 'jonthekiller';
 
@@ -68,7 +68,7 @@ class CheckpointsLivePlugin implements ManialinkPageAnswerListener, CallbackList
 	// $ranking = array ($playerlogin, $nbCPs, $CPTime)
 	private $ranking = array();
 	// Gamemodes supported by the plugin
-	private $gamemodes = array("Cup.Script.txt", "Rounds.Script.txt", "Team.Script.txt", "Laps.Script.txt", "Champion.Script.txt", "Trackmania/TM_Rounds_Online.Script.txt", "Trackmania/TM_Cup_Online.Script.txt");
+	private $gamemodes = array("Cup.Script.txt", "Rounds.Script.txt", "Team.Script.txt", "Laps.Script.txt", "Champion.Script.txt", "Trackmania/TM_Rounds_Online.Script.txt", "Trackmania/TM_Cup_Online.Script.txt", "Trackmania/TM_Teams_Online.Script.txt");
 	private $script    = array();
 	private $active    = false;
 	private $nbCPs     = 0;
@@ -394,8 +394,19 @@ class CheckpointsLivePlugin implements ManialinkPageAnswerListener, CallbackList
 			//Quad with Spec action
 			$quad = new Quad();
 			$recordFrame->addChild($quad);
-			$quad->setStyles(Quad_Bgs1InRace::STYLE, Quad_Bgs1InRace::SUBSTYLE_BgCardList);
-			$quad->setSize($width, $lineHeight);
+			if ($this->script == "Trackmania/TM_Teams_Online.Script.txt" OR $this->script == "Team.Script.txt") {
+				$quad->setStyles(Quad_Bgs1InRace::STYLE, Quad_Bgs1InRace::SUBSTYLE_BgCard);
+				$quad->setOpacity(0.7);
+				if ($player->teamId == 0) {
+					$quad->setColorize('00f');
+				} else {
+					$quad->setColorize('f00');
+				}
+
+			}else{
+				$quad->setStyles(Quad_Bgs1InRace::STYLE, Quad_Bgs1InRace::SUBSTYLE_BgCardList);
+			}
+			$quad->setSize($width-1, $lineHeight);
 			$quad->setAction(self::ACTION_SPEC . '.' . $player->login);
 
 			if ($this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_CHECKPOINTS_LIVE_CHANGE_POSITION)) {

@@ -25,13 +25,14 @@ use ManiaControl\Players\PlayerManager;
 use ManiaControl\Plugins\Plugin;
 use ManiaControl\Settings\Setting;
 use ManiaControl\Settings\SettingManager;
+use ManiaControl\Utils\Formatter;
 use Maniaplanet\DedicatedServer\InvalidArgumentException;
 use Maniaplanet\DedicatedServer\Xmlrpc\Exception;
 
 class KnockOutPlugin implements ManialinkPageAnswerListener, CallbackListener, CommandListener, TimerListener, CommunicationListener, Plugin {
 
 	const PLUGIN_ID      = 125;
-	const PLUGIN_VERSION = 0.36;
+	const PLUGIN_VERSION = 2.0;
 	const PLUGIN_NAME    = 'KnockOutPlugin';
 	const PLUGIN_AUTHOR  = 'jonthekiller';
 
@@ -45,10 +46,24 @@ class KnockOutPlugin implements ManialinkPageAnswerListener, CallbackListener, C
 	const SETTING_KNOCKOUT_MAPLIST            = 'Maplist to use';
 	const SETTING_KNOCKOUT_SHUFFLEMAPS        = 'Shuffle Maplist';
 	const SETTING_KNOCKOUT_ALLOWREPASWN       = 'S_AllowRespawn';
+	const SETTING_KNOCKOUT_POINTSREPARTITION  = 'S_PointsRepartition';
 	const SETTING_KNOCKOUT_PLAYER_PASSWORD    = 'Server player password during KO:';
 	const SETTING_KNOCKOUT_SPECTATOR_PASSWORD = 'Server spectator password during KO:';
 	const SETTING_KNOCKOUT_NBLIFES            = 'Number of lives:';
-	const SETTING_KNOCKOUT_SPEC_OR_KICK  = 'Force Spec or Kick after KO:';
+	const SETTING_KNOCKOUT_SPEC_OR_KICK       = 'Force Spec or Kick after KO:';
+	const SETTING_KNOCKOUT_SOLO_OR_TEAM       = 'Solo or Team mode:';
+
+
+	// const for TMNext
+	const SETTING_KNOCKOUT_RESPAWNBEHAVIOUR  = 'S_RespawnBehaviour';
+	const SETTING_KNOCKOUT_DECO_CHECKPOINT   = 'S_DecoImageUrl_Checkpoint';
+	const SETTING_KNOCKOUT_DECO_SPONSOR      = 'S_DecoImageUrl_DecalSponsor4x1';
+	const SETTING_KNOCKOUT_DECO_SCREEN16X9   = 'S_DecoImageUrl_Screen16x9';
+	const SETTING_KNOCKOUT_DECO_SCREEN8X1    = 'S_DecoImageUrl_Screen8x1';
+	const SETTING_KNOCKOUT_DECO_SCREEN16X1   = 'S_DecoImageUrl_Screen16x1';
+	const SETTING_KNOCKOUT_USEDELAYEDVISUALS = 'S_UseDelayedVisuals';
+	const SETTING_KNOCKOUT_TRUSTCLIENTSIMU   = 'S_TrustClientSimu';
+
 
 	const MLID_KNOCKOUT_WIDGET         = 'KnockoutPlugin.Widget';
 	const MLID_KNOCKOUT_WIDGETTIMES    = 'KnockoutPlugin.WidgetTimes';
@@ -63,6 +78,10 @@ class KnockOutPlugin implements ManialinkPageAnswerListener, CallbackListener, C
 	const SETTINGS_KNOCKOUT_MOVE_RACE_RANKING_X = 'Race Ranking Position X';
 	const SETTINGS_KNOCKOUT_MOVE_RACE_RANKING_Y = 'Race Ranking Position Y';
 	const SETTINGS_KNOCKOUT_MOVE_RACE_RANKING_Z = 'Race Ranking Position Z';
+
+	const TABLE_RESULTS = 'drakonia_knockout';
+
+	const SETTING_MATCH_TEAMSLIST                  = 'File with teams list';
 
 	/*
 * Private properties
@@ -81,6 +100,10 @@ class KnockOutPlugin implements ManialinkPageAnswerListener, CallbackListener, C
 	private $nblifes              = 1;
 	private $playerslifes         = array();
 	private $widgetshown          = false;
+	private $isTrackmania         = false;
+	private $matchinit            = false;
+	private $loadedSettings       = array();
+	private $playerslist = array();
 
 	/**
 	 * @param ManiaControl $maniaControl
@@ -128,12 +151,18 @@ class KnockOutPlugin implements ManialinkPageAnswerListener, CallbackListener, C
 	public function load(ManiaControl $maniaControl) {
 		$this->maniaControl = $maniaControl;
 
+		if ($this->maniaControl->getServer()->titleId == "Trackmania") {
+			$this->isTrackmania = true;
+		} else {
+			$this->isTrackmania = false;
+		}
+
 		//Settings
 		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_KNOCKOUT_ACTIVATED, true, "Activate the plugin");
 		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_KNOCKOUT_WIDGET_ACTIVATED, true, "Activate the widget");
 		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_KNOCKOUT_SPEC_OR_KICK, array('Spec', 'Kick'), "Force Spec or Kick player if eliminated");
+		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_KNOCKOUT_SOLO_OR_TEAM, array('Solo', 'Team'), "Solo or Team gamemode");
 
-		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_KNOCKOUT_ALLOWREPASWN, true, "Allow Respawn");
 		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_KNOCKOUT_DURATIONWARMUP, 10, "Warm-Up Duration in seconds");
 		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_KNOCKOUT_MAPLIST, "Drakonia_KO.txt", "Matchsettings file to load (file with the list of maps)");
 		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_KNOCKOUT_ROUNDSPERMAP, 4, "Number of rounds per map");
@@ -148,12 +177,52 @@ class KnockOutPlugin implements ManialinkPageAnswerListener, CallbackListener, C
 		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_KNOCKOUT_POSY, 70, "Position of the widget (on Y axis)");
 		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_KNOCKOUT_WIDTH, 42, "Width of the widget");
 
-		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTINGS_KNOCKOUT_MOVE_RACE_RANKING, true, "Move Nadeo Race Ranking widget (displayed at the end of the round)");
-		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTINGS_KNOCKOUT_MOVE_RACE_RANKING_X, 100, "Position of the Race Ranking widget (on X axis)");
-		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTINGS_KNOCKOUT_MOVE_RACE_RANKING_Y, 50, "Position of the Race Ranking widget (on Y axis)");
-		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTINGS_KNOCKOUT_MOVE_RACE_RANKING_Z, 150, "Position of the Race Ranking widget (on Z axis)");
+		if (!$this->isTrackmania) {
+			$this->maniaControl->getSettingManager()->initSetting($this, self::SETTINGS_KNOCKOUT_MOVE_RACE_RANKING, true, "Move Nadeo Race Ranking widget (displayed at the end of the round)");
+			$this->maniaControl->getSettingManager()->initSetting($this, self::SETTINGS_KNOCKOUT_MOVE_RACE_RANKING_X, 100, "Position of the Race Ranking widget (on X axis)");
+			$this->maniaControl->getSettingManager()->initSetting($this, self::SETTINGS_KNOCKOUT_MOVE_RACE_RANKING_Y, 50, "Position of the Race Ranking widget (on Y axis)");
+			$this->maniaControl->getSettingManager()->initSetting($this, self::SETTINGS_KNOCKOUT_MOVE_RACE_RANKING_Z, 150, "Position of the Race Ranking widget (on Z axis)");
+			$this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_KNOCKOUT_ALLOWREPASWN, true, "Allow Respawn");
 
-				$this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_KNOCKOUT_AUTHLEVEL, AuthenticationManager::getPermissionLevelNameArray(AuthenticationManager::AUTH_LEVEL_ADMIN), "Admin level needed to use the plugin");
+			$scriptsDataDir = $maniaControl->getServer()->getDirectory()->getScriptsFolder();
+
+			if ($maniaControl->getServer()->checkAccess($scriptsDataDir)) {
+				$gameShort = $this->maniaControl->getMapManager()->getCurrentMap()->getGame();
+				$game      = '';
+				switch ($gameShort) {
+					case 'tm':
+						$game = 'TrackMania';
+						break;
+					case 'sm':
+						$game = 'ShootMania';
+						break;
+					case 'qm':
+						$game = 'QuestMania';
+						break;
+				}
+				if ($game != '') {
+					$this->scriptsDir = $scriptsDataDir . 'Modes' . DIRECTORY_SEPARATOR . $game . DIRECTORY_SEPARATOR;
+					// Final assertion
+					if (!$maniaControl->getServer()->checkAccess($this->scriptsDir)) {
+						$this->scriptsDir = null;
+					}
+				}
+			}
+		} else {
+			// For TMNext
+			$this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_KNOCKOUT_DECO_CHECKPOINT, "", "Deco URL for Checkpoint");
+			$this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_KNOCKOUT_DECO_SCREEN8X1, "", "Deco URL for Screen 8x1");
+			$this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_KNOCKOUT_DECO_SPONSOR, "", "Deco URL for Sponsor");
+			$this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_KNOCKOUT_DECO_SCREEN16X1, "", "Deco URL for Screen 16x1");
+			$this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_KNOCKOUT_DECO_SCREEN16X9, "", "Deco URL for Screen 16x9");
+			$this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_KNOCKOUT_RESPAWNBEHAVIOUR, array(0, 1, 2, 3,
+			                                                                                                            4), "Respawn Behaviour (0: default, 1: normal, 2: do nothing, 3: give up before 1st CP, 4: always give up)");
+			$this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_KNOCKOUT_USEDELAYEDVISUALS, true, "Activate the Delayed Visuals for ghosts cars (performances)");
+			$this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_KNOCKOUT_TRUSTCLIENTSIMU, true, "Use Trust Client Simulation (performances)");
+
+		}
+
+		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_KNOCKOUT_AUTHLEVEL, AuthenticationManager::getPermissionLevelNameArray(AuthenticationManager::AUTH_LEVEL_ADMIN), "Admin level needed to use the plugin");
 
 
 		$this->maniaControl->getCallbackManager()->registerCallbackListener(SettingManager::CB_SETTING_CHANGED, $this, 'updateSettings');
@@ -165,34 +234,63 @@ class KnockOutPlugin implements ManialinkPageAnswerListener, CallbackListener, C
 		$this->maniaControl->getCommandManager()->registerCommandListener('koaddlives', $this, 'onCommandKOAddLives', true, 'Add lives for a player [login] [lives]');
 		$this->maniaControl->getCommandManager()->registerCommandListener('koremovelives', $this, 'onCommandKORemoveLives', true, 'Remove lives for a player [login] [lives]');
 
+		$this->maniaControl->getCallbackManager()->registerCallbackListener(Callbacks::BEGINMAP, $this, 'handleBeginMapCallback');
 		$this->maniaControl->getCallbackManager()->registerCallbackListener(Callbacks::MP_STARTROUNDSTART, $this, 'handleBeginRoundCallback');
 		$this->maniaControl->getCallbackManager()->registerCallbackListener(Callbacks::TM_SCORES, $this, 'handleEndRoundCallback');
 
 		$this->maniaControl->getCallbackManager()->registerCallbackListener(CallbackManager::CB_MP_PLAYERMANIALINKPAGEANSWER, $this, 'handleSpec');
 
-		$scriptsDataDir = $maniaControl->getServer()->getDirectory()->getScriptsFolder();
+		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_MATCH_TEAMSLIST, '/data/ntwu/ManiaControl_Twitch/teams.txt');
 
-		if ($maniaControl->getServer()->checkAccess($scriptsDataDir)) {
-			$gameShort = $this->maniaControl->getMapManager()->getCurrentMap()->getGame();
-			$game      = '';
-			switch ($gameShort) {
-				case 'tm':
-					$game = 'TrackMania';
-					break;
-				case 'sm':
-					$game = 'ShootMania';
-					break;
-				case 'qm':
-					$game = 'QuestMania';
-					break;
-			}
-			if ($game != '') {
-				$this->scriptsDir = $scriptsDataDir . 'Modes' . DIRECTORY_SEPARATOR . $game . DIRECTORY_SEPARATOR;
-				// Final assertion
-				if (!$maniaControl->getServer()->checkAccess($this->scriptsDir)) {
-					$this->scriptsDir = null;
+		$this->init();
+
+
+		$this->initTables();
+	}
+
+	public function init() {
+		$file = $this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_MATCH_TEAMSLIST);
+		//		$server = $this->maniaControl->getServer()->login;
+		//		$file   = $file . $server . ".txt";
+		if (file_exists($file)) {
+			$lines  = explode(PHP_EOL, file_get_contents($file));
+			$lineid = 1;
+			foreach ($lines as $line) {
+				//				var_dump($line);
+				$team            = explode('=', $line, 2);
+				$players         = explode(',', $team[1]);
+				foreach ($players as $player) {
+					$player2                    = explode(':', $player);
+					$this->playerslist[]        = $player2[0];
 				}
+
+				$lineid++;
 			}
+		} else {
+			$this->maniaControl->getChat()->sendErrorToAdmins("Teams File doesn't exist: " . $file);
+
+		}
+
+		//		        var_dump($this->teams);
+		//		        var_dump($this->teamsName);
+	}
+
+	/**
+	 * Initialize needed database tables
+	 */
+	private function initTables() {
+		$mysqli = $this->maniaControl->getDatabase()->getMysqli();
+		$query  = "CREATE TABLE IF NOT EXISTS `" . self::TABLE_RESULTS . "` (
+				`id` INT(11) NOT NULL AUTO_INCREMENT,
+				`server` VARCHAR(60) NOT NULL,
+				`mapname` VARCHAR(255) DEFAULT NULL,
+				`round` INT(11) NOT NULL,
+				`results` TEXT NOT NULL,
+				PRIMARY KEY (`id`)
+				) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_unicode_ci AUTO_INCREMENT=1;";
+		$mysqli->query($query);
+		if ($mysqli->error) {
+			trigger_error($mysqli->error, E_USER_ERROR);
 		}
 
 	}
@@ -271,7 +369,7 @@ class KnockOutPlugin implements ManialinkPageAnswerListener, CallbackListener, C
 				try {
 					if ($this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_KNOCKOUT_SPEC_OR_KICK) === "Kick") {
 						$this->maniaControl->getClient()->kick($player->login);
-					}else{
+					} else {
 						$this->maniaControl->getClient()->forceSpectator($player->login, 1);
 					}
 				} catch (Exception $e) {
@@ -293,13 +391,9 @@ class KnockOutPlugin implements ManialinkPageAnswerListener, CallbackListener, C
 				$this->maniaControl->getChat()->sendChat("$0f0KO match start!");
 				Logger::log("KO match start!");
 
-				$loadedSettings = array("S_PointsLimit"                       => 999999, "S_WarmUpNb" => 1, "S_MapsPerMatch" => 9999,
-				                        self::SETTING_KNOCKOUT_ROUNDSPERMAP   => (int) $this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_KNOCKOUT_ROUNDSPERMAP),
-				                        self::SETTING_KNOCKOUT_ALLOWREPASWN   => (boolean) $this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_KNOCKOUT_ALLOWREPASWN),
-				                        self::SETTING_KNOCKOUT_DURATIONWARMUP => (int) $this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_KNOCKOUT_DURATIONWARMUP),
-				                        self::SETTING_KNOCKOUT_FINISHTIMEOUT  => (int) $this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_KNOCKOUT_FINISHTIMEOUT),
 
-				);
+				$this->playerslifes = array();
+				$this->nbrounds     = 0;
 
 				//        var_dump($loadedSettings);
 				$this->nblifes = $this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_KNOCKOUT_NBLIFES);
@@ -331,27 +425,94 @@ class KnockOutPlugin implements ManialinkPageAnswerListener, CallbackListener, C
 				}
 
 
-				$scriptName = 'Rounds.Script.txt';
-				$this->loadScript($scriptName, $loadedSettings);
-				$this->koStarted  = true;
-				$this->koStarted2 = true;
-
 				$this->maniaControl->getClient()->setServerPassword($this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_KNOCKOUT_PLAYER_PASSWORD));
 				$this->maniaControl->getClient()->setServerPasswordForSpectator($this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_KNOCKOUT_SPECTATOR_PASSWORD));
 
-				$nbplayers = $this->maniaControl->getPlayerManager()->getPlayerCount(true);
+				$nbplayers         = $this->maniaControl->getPlayerManager()->getPlayerCount(true);
 				$pointsrepartition = $nbplayers;
-				foreach (range(($nbplayers-1), 1) as $number) {
+				foreach (range(($nbplayers - 1), 1) as $number) {
 					$pointsrepartition .= "," . $number;
 				}
-//				var_dump($pointsrepartition);
-				$pointsrepartition = explode(",",$pointsrepartition);
+				//				var_dump($pointsrepartition);
 
-				$this->maniaControl->getModeScriptEventManager()->setTrackmaniaPointsRepartition($pointsrepartition);
+
+				if ($this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_KNOCKOUT_SOLO_OR_TEAM) == "Solo") {
+					if (!$this->isTrackmania) {
+						$scriptName     = 'Rounds.Script.txt';
+						$loadedSettings = array("S_PointsLimit"                       => 999999, "S_WarmUpNb" => 1, "S_MapsPerMatch" => 9999,
+						                        self::SETTING_KNOCKOUT_ROUNDSPERMAP   => (int) $this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_KNOCKOUT_ROUNDSPERMAP),
+						                        self::SETTING_KNOCKOUT_ALLOWREPASWN   => (boolean) $this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_KNOCKOUT_ALLOWREPASWN),
+						                        self::SETTING_KNOCKOUT_DURATIONWARMUP => (int) $this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_KNOCKOUT_DURATIONWARMUP),
+						                        self::SETTING_KNOCKOUT_FINISHTIMEOUT  => (int) $this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_KNOCKOUT_FINISHTIMEOUT),
+
+						);
+					} else {
+						$scriptName     = 'TM_Rounds_Online.Script.txt';
+						$loadedSettings = array("S_PointsLimit"                          => 999999, "S_WarmUpNb" => 1, "S_MapsPerMatch" => 9999,
+						                        self::SETTING_KNOCKOUT_ROUNDSPERMAP      => (int) $this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_KNOCKOUT_ROUNDSPERMAP),
+						                        self::SETTING_KNOCKOUT_RESPAWNBEHAVIOUR  => (int) $this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_KNOCKOUT_RESPAWNBEHAVIOUR),
+						                        self::SETTING_KNOCKOUT_DURATIONWARMUP    => (int) $this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_KNOCKOUT_DURATIONWARMUP),
+						                        self::SETTING_KNOCKOUT_FINISHTIMEOUT     => (int) $this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_KNOCKOUT_FINISHTIMEOUT),
+						                        self::SETTING_KNOCKOUT_POINTSREPARTITION => (string) $pointsrepartition,
+						                        self::SETTING_KNOCKOUT_DECO_SCREEN16X9   => $this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_KNOCKOUT_DECO_SCREEN16X9),
+						                        self::SETTING_KNOCKOUT_DECO_SCREEN16X1   => $this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_KNOCKOUT_DECO_SCREEN16X1),
+						                        self::SETTING_KNOCKOUT_DECO_SPONSOR      => $this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_KNOCKOUT_DECO_SPONSOR),
+						                        self::SETTING_KNOCKOUT_DECO_SCREEN8X1    => $this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_KNOCKOUT_DECO_SCREEN8X1),
+						                        self::SETTING_KNOCKOUT_DECO_CHECKPOINT   => $this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_KNOCKOUT_DECO_CHECKPOINT),
+						                        self::SETTING_KNOCKOUT_USEDELAYEDVISUALS => (boolean) $this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_KNOCKOUT_USEDELAYEDVISUALS),
+						                        self::SETTING_KNOCKOUT_TRUSTCLIENTSIMU   => (boolean) $this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_KNOCKOUT_TRUSTCLIENTSIMU),
+
+
+						);
+					}
+				} else {
+					if (!$this->isTrackmania) {
+						$scriptName     = 'Team.Script.txt';
+						$loadedSettings = array("S_PointsLimit"                       => 999999, "S_WarmUpNb" => 1, "S_MapsPerMatch" => 9999,
+						                        self::SETTING_KNOCKOUT_ROUNDSPERMAP   => (int) $this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_KNOCKOUT_ROUNDSPERMAP),
+						                        self::SETTING_KNOCKOUT_ALLOWREPASWN   => (boolean) $this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_KNOCKOUT_ALLOWREPASWN),
+						                        self::SETTING_KNOCKOUT_DURATIONWARMUP => (int) $this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_KNOCKOUT_DURATIONWARMUP),
+						                        self::SETTING_KNOCKOUT_FINISHTIMEOUT  => (int) $this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_KNOCKOUT_FINISHTIMEOUT),
+
+						);
+					} else {
+						$scriptName     = 'TM_Teams_Online.Script.txt';
+						$loadedSettings = array("S_PointsLimit"                          => 999999, "S_WarmUpNb" => 1, "S_MapsPerMatch" => 9999,
+						                        self::SETTING_KNOCKOUT_ROUNDSPERMAP      => (int) $this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_KNOCKOUT_ROUNDSPERMAP),
+						                        self::SETTING_KNOCKOUT_RESPAWNBEHAVIOUR  => (int) $this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_KNOCKOUT_RESPAWNBEHAVIOUR),
+						                        self::SETTING_KNOCKOUT_DURATIONWARMUP    => (int) $this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_KNOCKOUT_DURATIONWARMUP),
+						                        self::SETTING_KNOCKOUT_FINISHTIMEOUT     => (int) $this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_KNOCKOUT_FINISHTIMEOUT),
+						                        self::SETTING_KNOCKOUT_POINTSREPARTITION => (string) $pointsrepartition,
+						                        self::SETTING_KNOCKOUT_DECO_SCREEN16X9   => $this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_KNOCKOUT_DECO_SCREEN16X9),
+						                        self::SETTING_KNOCKOUT_DECO_SCREEN16X1   => $this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_KNOCKOUT_DECO_SCREEN16X1),
+						                        self::SETTING_KNOCKOUT_DECO_SPONSOR      => $this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_KNOCKOUT_DECO_SPONSOR),
+						                        self::SETTING_KNOCKOUT_DECO_SCREEN8X1    => $this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_KNOCKOUT_DECO_SCREEN8X1),
+						                        self::SETTING_KNOCKOUT_DECO_CHECKPOINT   => $this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_KNOCKOUT_DECO_CHECKPOINT),
+						                        self::SETTING_KNOCKOUT_USEDELAYEDVISUALS => (boolean) $this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_KNOCKOUT_USEDELAYEDVISUALS),
+						                        self::SETTING_KNOCKOUT_TRUSTCLIENTSIMU   => (boolean) $this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_KNOCKOUT_TRUSTCLIENTSIMU),
+
+
+						);
+					}
+				}
+
+				$this->loadScript($scriptName, $loadedSettings);
+
+				$this->koStarted  = true;
+				$this->koStarted2 = true;
 
 				$this->displayWidgets();
 
-				$this->moveRaceRanking();
+
+
+				if ($this->isTrackmania) {
+					$this->loadedSettings = $loadedSettings;
+					$this->matchinit      = true;
+				} else {
+					$this->moveRaceRanking();
+					$pointsrepartition = explode(",", $pointsrepartition);
+					$this->maniaControl->getModeScriptEventManager()->setTrackmaniaPointsRepartition($pointsrepartition);
+				}
 
 				$this->maniaControl->getMapManager()->getMapActions()->skipMap();
 
@@ -366,12 +527,20 @@ class KnockOutPlugin implements ManialinkPageAnswerListener, CallbackListener, C
 
 		$this->koStarted = false;
 
-		$scriptName = 'TimeAttack.Script.txt';
-
-		$loadedSettings = array('S_TimeLimit' => 600, "S_WarmUpNb" => 0, self::SETTING_KNOCKOUT_ALLOWREPASWN => true, self::SETTING_KNOCKOUT_DURATIONWARMUP => 0);
+		if ($this->isTrackmania) {
+			$scriptName     = "TM_TimeAttack_Online.Script.txt";
+			$loadedSettings = array('S_TimeLimit' => 600, "S_WarmUpNb" => 0);
+		} else {
+			$scriptName     = 'TimeAttack.Script.txt';
+			$loadedSettings = array('S_TimeLimit' => 600, "S_WarmUpNb" => 0, self::SETTING_KNOCKOUT_ALLOWREPASWN => true, self::SETTING_KNOCKOUT_DURATIONWARMUP => 0);
+		}
 
 
 		$this->loadScript($scriptName, $loadedSettings);
+		if ($this->isTrackmania) {
+			$this->loadedSettings = $loadedSettings;
+			$this->matchinit      = true;
+		}
 		$this->maniaControl->getChat()->sendSuccess("KO match stop");
 		Logger::log("KO match stop");
 
@@ -384,8 +553,7 @@ class KnockOutPlugin implements ManialinkPageAnswerListener, CallbackListener, C
 
 		// Allow all players to choose play
 		$players = $this->maniaControl->getPlayerManager()->getPlayers();
-		foreach ($players as $player)
-		{
+		foreach ($players as $player) {
 			try {
 				$this->maniaControl->getClient()->forceSpectator($player->login, 0);
 			} catch (InvalidArgumentException $e) {
@@ -406,9 +574,26 @@ class KnockOutPlugin implements ManialinkPageAnswerListener, CallbackListener, C
 
 	}
 
+	public function handleBeginMapCallback() {
+
+		if ($this->isTrackmania and $this->matchinit) {
+			if ($this->koStarted) {
+				if ($this->loadedSettings != null) {
+					Logger::log("Load Settings for match");
+					$this->maniaControl->getClient()->setModeScriptSettings($this->loadedSettings);
+				}
+			}
+			$this->matchinit = false;
+		}
+
+
+
+	}
+
 	public function handleBeginRoundCallback() {
 		$this->alreadydone = false;
 		$this->koStarted2  = false;
+		$this->displayKO($this->playerslifes);
 	}
 
 	/**
@@ -420,6 +605,8 @@ class KnockOutPlugin implements ManialinkPageAnswerListener, CallbackListener, C
 		$this->nbplayers2 = 0;
 		$realSection      = false;
 		$playerresults    = array();
+		$scores           = array();
+		$rank             = 1;
 		if (!$this->koStarted2) {
 
 			if ($this->koStarted) {
@@ -437,10 +624,13 @@ class KnockOutPlugin implements ManialinkPageAnswerListener, CallbackListener, C
 				foreach ($results as $result) {
 					$login  = $result->getPlayer()->login;
 					$player = $result->getPlayer();
-					if (!$player->isSpectator AND $player->isConnected) {
+					if (in_array($player->login, $this->playerslist) && !$player->isSpectator) {
 
 						$roundpoints = $result->getRoundPoints();
-						Logger::log($login . " " . $roundpoints);
+						Logger::log($player->nickname . " " . $roundpoints);
+
+						// For database results
+						$scores[$rank] = array("login" => $login, "KO" => 0);
 
 
 						if ($roundpoints == 0) {
@@ -453,17 +643,29 @@ class KnockOutPlugin implements ManialinkPageAnswerListener, CallbackListener, C
 							//                            if ($this->playerslifes[$login] > 0) {
 							//                                $this->playerslifes[$login]--;
 							//                            }
+							Logger::log($player->nickname . " has " . $this->playerslifes[$login] . " lives");
 							if ($this->playerslifes[$login] == 0) {
 								Logger::log("Player " . $result->getPlayer()->nickname . " is eliminated");
+								$scores[$rank] = array("login" => $login, "KO" => 1);
 
 								try {
-									$this->maniaControl->getClient()->chatSend("Player " . $result->getPlayer()->nickname . " \$z is eliminated");
+									if ($this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_KNOCKOUT_SOLO_OR_TEAM) == "Solo") {
+										$this->maniaControl->getClient()->chatSend("Player " . $result->getPlayer()->nickname . " \$z is eliminated");
+									} else {
+										if ($result->getPlayer()->teamId == 0) {
+											$this->maniaControl->getClient()->chatSend("$00fPlayer " . $result->getPlayer()->nickname . " \$z is eliminated");
+										} elseif ($result->getPlayer()->teamId == 1) {
+											$this->maniaControl->getClient()->chatSend("\$f00Player " . $result->getPlayer()->nickname . " \$z is eliminated");
+										} else {
+//											$this->maniaControl->getClient()->chatSend("Player " . $result->getPlayer()->nickname . " \$z is eliminated");
+										}
+									}
 								} catch (InvalidArgumentException $e) {
 								}
 								try {
 									if ($this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_KNOCKOUT_SPEC_OR_KICK) === "Kick") {
 										$this->maniaControl->getClient()->kick($login);
-									}else{
+									} else {
 										$this->maniaControl->getClient()->forceSpectator($login, 1);
 									}
 								} catch (Exception $e) {
@@ -477,7 +679,18 @@ class KnockOutPlugin implements ManialinkPageAnswerListener, CallbackListener, C
 									Logger::log("Player " . $result->getPlayer()->nickname . " has now " . $this->playerslifes[$login] . " lives");
 
 									try {
-										$this->maniaControl->getClient()->chatSend("Player " . $result->getPlayer()->nickname . " \$zhas now " . $this->playerslifes[$login] . " lives");
+										if ($this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_KNOCKOUT_SOLO_OR_TEAM) == "Solo") {
+											$this->maniaControl->getClient()->chatSend("Player " . $result->getPlayer()->nickname . " \$zhas now " . $this->playerslifes[$login] . " lives");
+										} else {
+											if ($result->getPlayer()->teamId == 0) {
+												$this->maniaControl->getClient()->chatSend("$00fPlayer " . $result->getPlayer()->nickname . " \$zhas now " . $this->playerslifes[$login] . " lives");
+											} elseif ($result->getPlayer()->teamId == 1) {
+												$this->maniaControl->getClient()->chatSend("\$f00Player " . $result->getPlayer()->nickname . " \$zhas now " . $this->playerslifes[$login] . " lives");
+											} else {
+//												$this->maniaControl->getClient()->chatSend("Player " . $result->getPlayer()->nickname . " \$zhas now " . $this->playerslifes[$login] . " lives");
+											}
+										}
+
 									} catch (InvalidArgumentException $e) {
 									}
 									$this->nbplayers2++;
@@ -489,38 +702,52 @@ class KnockOutPlugin implements ManialinkPageAnswerListener, CallbackListener, C
 							$this->players[$this->nbplayers] = $login;
 							$this->nbplayers++;
 							$this->nbplayers2++;
+
 						}
 					}
-
+					$rank++;
 				}
 
 
 				Logger::log("Nb players who hasn't finished: " . $nbplayersdel);
 				arsort($playerresults);
 
+				$logintokick = "";
+				$koplayer    = "";
 				//                var_dump($playerresults);
 				foreach ($playerresults as $key => $value) {
 					$logintokick = $key;
 				}
 				//                $logintokick = $this->players[($this->nbplayers - 1)];
 
-				if (count($playerresults) > 1 AND $nbplayersdel == 0) {
-					Logger::log($logintokick . " last player");
+				if (count($playerresults) > 1 and $nbplayersdel == 0) {
+					Logger::log($this->maniaControl->getPlayerManager()->getPlayer($logintokick)->nickname . " last player");
 
 					$this->playerslifes[$logintokick]--;
 					if ($this->playerslifes[$logintokick] == 0) {
 
 						$this->nbplayers--;
 						Logger::log("Player " . $this->maniaControl->getPlayerManager()->getPlayer($logintokick)->nickname . " is eliminated");
-
+						$koplayer = $logintokick;
 						try {
-							$this->maniaControl->getClient()->chatSend("Player " . $this->maniaControl->getPlayerManager()->getPlayer($logintokick)->nickname . " \$z is eliminated");
+							if ($this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_KNOCKOUT_SOLO_OR_TEAM) == "Solo") {
+								$this->maniaControl->getClient()->chatSend("Player " . $this->maniaControl->getPlayerManager()->getPlayer($logintokick)->nickname . " \$z is eliminated");
+							} else {
+								if ($this->maniaControl->getPlayerManager()->getPlayer($logintokick)->teamId == 0) {
+									$this->maniaControl->getClient()->chatSend("$00fPlayer " . $this->maniaControl->getPlayerManager()->getPlayer($logintokick)->nickname . " \$z is eliminated");
+								} elseif ($this->maniaControl->getPlayerManager()->getPlayer($logintokick)->teamId == 1) {
+									$this->maniaControl->getClient()->chatSend("\$f00Player " . $this->maniaControl->getPlayerManager()->getPlayer($logintokick)->nickname . " \$z is eliminated");
+								} else {
+//									$this->maniaControl->getClient()->chatSend("Player " . $this->maniaControl->getPlayerManager()->getPlayer($logintokick)->nickname . " \$z is eliminated");
+								}
+							}
+
 						} catch (InvalidArgumentException $e) {
 						}
 						try {
 							if ($this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_KNOCKOUT_SPEC_OR_KICK) === "Kick") {
 								$this->maniaControl->getClient()->kick($logintokick);
-							}else{
+							} else {
 								$this->maniaControl->getClient()->forceSpectator($logintokick, 1);
 							}
 						} catch (Exception $e) {
@@ -544,6 +771,35 @@ class KnockOutPlugin implements ManialinkPageAnswerListener, CallbackListener, C
 					}
 				} else {
 					//                    $this->nbplayers2++;
+				}
+
+				$tempscore = "";
+				// Database storage of results
+				foreach ($scores as $rank => $score) {
+					$ko = $score["KO"];
+					if ($koplayer == $score["login"]) {
+						$ko = 1;
+					}
+
+					$tempscore .= $rank . "," . $this->maniaControl->getPlayerManager()->getPlayer($score["login"])->nickname . "," . $ko . "" . PHP_EOL;
+				}
+
+				$mapname = $this->maniaControl->getMapManager()->getCurrentMap()->name;
+
+				$mapname = Formatter::stripCodes($mapname);
+				$mysqli  = $this->maniaControl->getDatabase()->getMysqli();
+				$server  = $this->maniaControl->getServer()->login;
+				$query   = "INSERT INTO `" . self::TABLE_RESULTS . "`
+                            (`server`,`mapname`,`round`,`results`)
+                            VALUES
+                            ('$server','$mapname'," . ($this->nbrounds + 1) . ",'$tempscore')";
+				Logger::log($query);
+				$mysqli->query($query);
+
+				if ($mysqli->error) {
+					trigger_error($mysqli->error);
+
+					return false;
 				}
 
 				$this->nbrounds++;
@@ -596,7 +852,7 @@ class KnockOutPlugin implements ManialinkPageAnswerListener, CallbackListener, C
 
 		// mainframe
 		$frame = new Frame();
-		$frame->setPosition($posX, $posY);
+		$frame->setPosition($posX, $posY, 998);
 		//        $maniaLink->addChild($frame);
 		//        $frame->setSize($width, $height);
 
@@ -614,7 +870,9 @@ class KnockOutPlugin implements ManialinkPageAnswerListener, CallbackListener, C
 		$titleLabel->setWidth($width);
 		$titleLabel->setStyle($labelStyle);
 		$titleLabel->setTextSize(2);
-		$titleLabel->setText("Knockout Live");
+		//		$titleLabel->setText("Knockout Live");
+		//TODO: For Twitch Rivals
+		$titleLabel->setText("KO Live");
 		$titleLabel->setTranslate(true);
 
 		$maniaLink = new ManiaLink(self::MLID_KNOCKOUT_WIDGET);
@@ -637,7 +895,7 @@ class KnockOutPlugin implements ManialinkPageAnswerListener, CallbackListener, C
 			$maniaLink = new ManiaLink(self::MLID_KNOCKOUT_WIDGETTIMES);
 			$listFrame = new Frame();
 			$maniaLink->addChild($listFrame);
-			$listFrame->setPosition($posX, $posY);
+			$listFrame->setPosition($posX, $posY, 999);
 
 			// Obtain a list of columns
 
@@ -652,6 +910,10 @@ class KnockOutPlugin implements ManialinkPageAnswerListener, CallbackListener, C
 
 				$points = $record;
 
+				//TODO: For Twitch Rivals
+				if ($points == 1) {
+					$points = "";
+				}
 
 				$player = $this->maniaControl->getPlayerManager()->getPlayer($index);
 
@@ -659,7 +921,7 @@ class KnockOutPlugin implements ManialinkPageAnswerListener, CallbackListener, C
 
 				$recordFrame = new Frame();
 				$listFrame->addChild($recordFrame);
-				$recordFrame->setPosition(0, $y + $lineHeight / 2);
+				$recordFrame->setPosition(0, $y + $lineHeight / 2, 999);
 
 				//Rank
 				$rankLabel = new Label();
@@ -669,7 +931,9 @@ class KnockOutPlugin implements ManialinkPageAnswerListener, CallbackListener, C
 				$rankLabel->setSize($width * 0.06, $lineHeight);
 				$rankLabel->setTextSize(1);
 				$rankLabel->setTextPrefix('$o');
-				$rankLabel->setText($rank);
+				//TODO : For Twitch Rivals
+				//				$rankLabel->setText($rank);
+
 				$rankLabel->setTextEmboss(true);
 
 				//Name
@@ -695,8 +959,20 @@ class KnockOutPlugin implements ManialinkPageAnswerListener, CallbackListener, C
 				//Quad with Spec action
 				$quad = new Quad();
 				$recordFrame->addChild($quad);
-				$quad->setStyles(Quad_Bgs1InRace::STYLE, Quad_Bgs1InRace::SUBSTYLE_BgCardList);
-				$quad->setSize($width, $lineHeight);
+
+				if ($this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_KNOCKOUT_SOLO_OR_TEAM) == "Team") {
+					$quad->setStyles(Quad_Bgs1InRace::STYLE, Quad_Bgs1InRace::SUBSTYLE_BgCard);
+					$quad->setOpacity(0.7);
+					if ($player->teamId == 0) {
+						$quad->setColorize('00f');
+					} else {
+						$quad->setColorize('f00');
+					}
+
+				} else {
+					$quad->setStyles(Quad_Bgs1InRace::STYLE, Quad_Bgs1InRace::SUBSTYLE_BgCardList);
+				}
+				$quad->setSize($width - 1, $lineHeight);
 				$quad->setAction(self::KNOCKOUT_ACTION_SPEC . '.' . $player->login);
 
 				$rank++;
@@ -764,22 +1040,28 @@ class KnockOutPlugin implements ManialinkPageAnswerListener, CallbackListener, C
 	 * @throws Exception
 	 */
 	private function loadScript(&$scriptName, array $loadedSettings) {
-		if ($this->scriptsDir !== null) {
-			$scriptPath = $this->scriptsDir . $scriptName;
+		if ($this->isTrackmania) {
 
-			if (!file_exists($scriptPath)) {
-				throw new Exception('Script not found (' . $scriptPath . ').');
-			}
 
-			// Get 'real' script name (mainly nice for Windows)
-			$scriptName = pathinfo(realpath($scriptPath))['basename'];
-			//var_dump($loadedSettings);
-			$script = file_get_contents($scriptPath);
-			$this->maniaControl->getClient()->setModeScriptText($script);
-			$this->maniaControl->getClient()->setScriptName($scriptName);
-			$this->maniaControl->getClient()->setModeScriptSettings($loadedSettings);
+			$this->maniaControl->getClient()->setScriptName("Trackmania/" . $scriptName);
 		} else {
-			throw new Exception('Scripts directory not found (' . $this->scriptsDir . ').');
+			if ($this->scriptsDir !== null) {
+				$scriptPath = $this->scriptsDir . $scriptName;
+
+				if (!file_exists($scriptPath)) {
+					throw new Exception('Script not found (' . $scriptPath . ').');
+				}
+
+				// Get 'real' script name (mainly nice for Windows)
+				$scriptName = pathinfo(realpath($scriptPath))['basename'];
+				//var_dump($loadedSettings);
+				$script = file_get_contents($scriptPath);
+				$this->maniaControl->getClient()->setModeScriptText($script);
+				$this->maniaControl->getClient()->setScriptName($scriptName);
+				$this->maniaControl->getClient()->setModeScriptSettings($loadedSettings);
+			} else {
+				throw new Exception('Scripts directory not found (' . $this->scriptsDir . ').');
+			}
 		}
 	}
 
