@@ -43,7 +43,7 @@ use Maniaplanet\DedicatedServer\InvalidArgumentException;
 class MatchPlugin implements ManialinkPageAnswerListener, CallbackListener, CommandListener, TimerListener, CommunicationListener, Plugin {
 
 	const PLUGIN_ID      = 119;
-	const PLUGIN_VERSION = 2.04;
+	const PLUGIN_VERSION = 2.1;
 	const PLUGIN_NAME    = 'MatchPlugin';
 	const PLUGIN_AUTHOR  = 'jonthekiller';
 
@@ -103,6 +103,8 @@ class MatchPlugin implements ManialinkPageAnswerListener, CallbackListener, Comm
 	const SETTING_MATCH_MATCH_USE_CRUDE_EXTRAPOLATION = 'S_UseCrudeExtrapolation';
 	const SETTING_MATCH_MATCH_TRUSTCLIENTSIMU         = 'S_TrustClientSimu';
 	const SETTING_MATCH_MATCH_WARMUP_TIMEOUT         = 'S_WarmUpTimeout';
+	
+	const SETTING_MATCH_STAGE_NUMBER	= 'Stage Number';
 
 	const ACTION_READY = 'ReadyButton.Action';
 	const TABLE_ROUNDS = 'drakonia_rounds';
@@ -277,6 +279,8 @@ class MatchPlugin implements ManialinkPageAnswerListener, CallbackListener, Comm
 		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_MATCH_PAUSE_POSX, 0, "Position of the Pause Countdown (on X axis)");
 		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_MATCH_PAUSE_POSY, 0, "Position of the Pause Countdown (on Y axis)");
 
+		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_MATCH_STAGE_NUMBER, "1", "Stage number for results");
+
 		// Specific settings for TMNext
 		if ($this->isTrackmania) {
 			$this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_MATCH_MATCH_INFINITELAPS, false, "Infinite Laps (Rounds, Laps)");
@@ -444,6 +448,14 @@ class MatchPlugin implements ManialinkPageAnswerListener, CallbackListener, Comm
 		$mysqli->query($query);
 		if ($mysqli->error) {
 			trigger_error($mysqli->error, E_USER_ERROR);
+		}
+		
+		// Add Stage Number inside the table
+		$alterQuery = "ALTER TABLE `" . self::TABLE_ROUNDS . "` ADD COLUMN IF NOT EXISTS stage_number varchar(50) DEFAULT '1'";
+		$result     = $mysqli->query($alterQuery);
+		if (!$result) {
+			trigger_error($mysqli->error);
+			return false;
 		}
 
 		$query = "CREATE TABLE IF NOT EXISTS `" . self::TABLE_MATCHS . "` (
@@ -1818,11 +1830,13 @@ class MatchPlugin implements ManialinkPageAnswerListener, CallbackListener, Comm
 						$rank++;
 					}
 				}
+				
+				$stage_number = $this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_MATCH_STAGE_NUMBER);
 
 				$query = "INSERT INTO `" . self::TABLE_ROUNDS . "`
-				(`server`, `rounds`)
+				(`server`, `rounds`, `stage_number`)
 				VALUES
-				('$server','$database')";
+				('$server','$database', '$stage_number')";
 				//Logger::log($query);
 				$mysqli->query($query);
 				if ($mysqli->error) {
