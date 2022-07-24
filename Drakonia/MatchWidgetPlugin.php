@@ -37,7 +37,7 @@ class MatchWidgetPlugin implements ManialinkPageAnswerListener, CallbackListener
 	 * Constants
 	 */
 	const PLUGIN_ID      = 127;
-	const PLUGIN_VERSION = 2.0;
+	const PLUGIN_VERSION = 2.01;
 	const PLUGIN_NAME    = 'MatchWidgetPlugin';
 	const PLUGIN_AUTHOR  = 'jonthekiller';
 
@@ -372,6 +372,7 @@ class MatchWidgetPlugin implements ManialinkPageAnswerListener, CallbackListener
 			$rankLabel->setTextPrefix('$o');
 			$rankLabel->setText($rank);
 			$rankLabel->setTextEmboss(true);
+      $rankLabel->setZ(1);
 
 			//Name
 			$nameLabel = new Label();
@@ -382,6 +383,7 @@ class MatchWidgetPlugin implements ManialinkPageAnswerListener, CallbackListener
 			$nameLabel->setTextSize(1);
 			$nameLabel->setText($player->nickname);
 			$nameLabel->setTextEmboss(true);
+      $nameLabel->setZ(1);
 
 			//Time
 			$timeLabel = new Label();
@@ -392,6 +394,7 @@ class MatchWidgetPlugin implements ManialinkPageAnswerListener, CallbackListener
 			$timeLabel->setTextSize(1);
 			$timeLabel->setText($points);
 			$timeLabel->setTextEmboss(true);
+      $timeLabel->setZ(1);
 
 			//Quad with Spec action
 			$quad = new Quad();

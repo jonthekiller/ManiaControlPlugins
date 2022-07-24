@@ -37,7 +37,7 @@ class CheckpointsLivePlugin implements ManialinkPageAnswerListener, CallbackList
 	 * Constants
 	 */
 	const PLUGIN_ID      = 111;
-	const PLUGIN_VERSION = 2.1;
+	const PLUGIN_VERSION = 2.11;
 	const PLUGIN_NAME    = 'CheckpointsLivePlugin';
 	const PLUGIN_AUTHOR  = 'jonthekiller';
 
@@ -52,6 +52,8 @@ class CheckpointsLivePlugin implements ManialinkPageAnswerListener, CallbackList
 	//    const SETTING_CHECKPOINTS_LIVE_HEIGHT    = 'CheckpointsLive-Widget-Size: Height';
 	const SETTING_CHECKPOINTS_LIVE_LINE_HEIGHT     = 'CheckpointsLive-Widget-Lines: Height';
 	const SETTING_CHECKPOINTS_LIVE_CHANGE_POSITION = 'Change position shown';
+
+const SETTINGS_MATCHWIDGET_MOVE_RACE_RANKING   = 'Race Ranking Default Position';
 
 
 	const SETTINGS_MATCHWIDGET_HIDE_SPEC         = 'Hide Spec Icon';
@@ -136,7 +138,7 @@ class CheckpointsLivePlugin implements ManialinkPageAnswerListener, CallbackList
 
 
 		$this->maniaControl->getTimerManager()->registerTimerListening($this, 'handle10Seconds', 10000);
-		$this->maniaControl->getTimerManager()->registerTimerListening($this, 'handle1Second', 1000);
+		$this->maniaControl->getTimerManager()->registerTimerListening($this, 'handle1Second', 2000);
 
 		$this->maniaControl->getCallbackManager()->registerCallbackListener(CallbackManager::CB_MP_PLAYERMANIALINKPAGEANSWER, $this, 'handleSpec');
 
@@ -155,7 +157,8 @@ class CheckpointsLivePlugin implements ManialinkPageAnswerListener, CallbackList
 		//        $this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_CHECKPOINTS_LIVE_HEIGHT, 40);
 		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_CHECKPOINTS_LIVE_LINE_HEIGHT, 4, "Height of a player line");
 
-		//        $this->maniaControl->getSettingManager()->initSetting($this, self::SETTINGS_MATCHWIDGET_HIDE_RACE_RANKING, true);
+		$this->maniaControl->getSettingManager()->initSetting($this, self::SETTINGS_MATCHWIDGET_MOVE_RACE_RANKING, false, "Move Nadeo Race Ranking widget (displayed at the end of the round)");
+   
 		if ($this->maniaControl->getServer()->titleId != "Trackmania") {
 			$this->maniaControl->getSettingManager()->initSetting($this, self::SETTINGS_MATCHWIDGET_HIDE_SPEC, true, "Hide the Spectator icon for players");
 			$this->maniaControl->getSettingManager()->initSetting($this, self::SETTING_CHECKPOINTS_LIVE_CHANGE_POSITION, false, "Display the icon when a player earn of lose a position (beta)");
@@ -171,7 +174,7 @@ class CheckpointsLivePlugin implements ManialinkPageAnswerListener, CallbackList
 
 		$this->displayWidgets();
 
-		//        $this->hideRaceRanking();
+//		$this->moveRaceRanking();
 
 
 
@@ -241,7 +244,9 @@ class CheckpointsLivePlugin implements ManialinkPageAnswerListener, CallbackList
 		}
 		$titleLabel->setStyle($labelStyle);
 		$titleLabel->setTextSize(2);
-		$titleLabel->setText("CP Live");
+//		$titleLabel->setText("CP Live");
+  	$titleLabel->setText("Checkpoints");
+    
 		$titleLabel->setTranslate(true);
 
 		$maniaLink = new ManiaLink(self::MLID_CHECKPOINTS_LIVE_WIDGET);
@@ -369,6 +374,7 @@ class CheckpointsLivePlugin implements ManialinkPageAnswerListener, CallbackList
 			$rankLabel->setTextPrefix('$o');
 			$rankLabel->setText($rank);
 			$rankLabel->setTextEmboss(true);
+      $rankLabel->setZ(1);
 
 			//Name
 			$nameLabel = new Label();
@@ -379,6 +385,7 @@ class CheckpointsLivePlugin implements ManialinkPageAnswerListener, CallbackList
 			$nameLabel->setTextSize(1);
 			$nameLabel->setText($player->nickname);
 			$nameLabel->setTextEmboss(true);
+      $nameLabel->setZ(1);
 
 			//Time
 			$timeLabel = new Label();
@@ -388,6 +395,7 @@ class CheckpointsLivePlugin implements ManialinkPageAnswerListener, CallbackList
 			$timeLabel->setSize($width * 0.25, $lineHeight);
 			$timeLabel->setTextSize(1);
 			$timeLabel->setText($time);
+      $timeLabel->setZ(1);
 
 			$timeLabel->setTextEmboss(true);
 
@@ -445,7 +453,7 @@ class CheckpointsLivePlugin implements ManialinkPageAnswerListener, CallbackList
 
 		} else {
 			$this->displayWidgets();
-			//            $this->hideRaceRanking();
+	//		$this->moveRaceRanking();
 
 			$this->hideSpecIcon();
 
@@ -860,24 +868,20 @@ class CheckpointsLivePlugin implements ManialinkPageAnswerListener, CallbackList
 
 	}
 
-	public function hideRaceRanking() {
-		if ($this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTINGS_MATCHWIDGET_HIDE_RACE_RANKING)) {
-			$properties = "<ui_properties>
-    <round_scores visible='false' />
-    <chat_avatar visible='false' />
-  </ui_properties>";
-//			Logger::log('Hide Race Ranking Widget');
-			$this->maniaControl->getModeScriptEventManager()->setTrackmaniaUIProperties($properties);
+  public function moveRaceRanking() {
 
-		} else {
-			$properties = "<ui_properties>
-    <round_scores pos='-158.5 40. 150.' visible='true' />
-    <chat_avatar visible='true' />
-  </ui_properties>";
-//			Logger::log('Show Race Ranking Widget');
-			$this->maniaControl->getModeScriptEventManager()->setTrackmaniaUIProperties($properties);
 
-		}
+			if ($this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTINGS_MATCHWIDGET_MOVE_RACE_RANKING)) {
+				Logger::log('Put Race Ranking Widget to the original place');
+				$data = '{ "uimodules": [ "Rounds_SmallScoresTable" ] }';
+				$this->maniaControl->getModeScriptEventManager()->resetTrackmania2020UIProperties($data);
+			}else{
+
+				$data = '{ "uimodules": [ { "id": "Rounds_SmallScoresTable", "position": [112.0, 70.0], "position_update": true } ] }';
+				$this->maniaControl->getModeScriptEventManager()->setTrackmania2020UIProperties($data);
+				Logger::log('Put Race Ranking Widget to custom position');
+			}
+		
 	}
 
 	public function hideSpecIcon() {
@@ -905,7 +909,7 @@ class CheckpointsLivePlugin implements ManialinkPageAnswerListener, CallbackList
 	public function updateSettings(Setting $setting) {
 		if ($setting->belongsToClass($this)) {
 			$this->displayWidgets();
-			//            $this->hideRaceRanking();
+//			$this->moveRaceRanking();
 
 			$this->hideSpecIcon();
 
