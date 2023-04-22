@@ -20,7 +20,7 @@ use ManiaControl\Plugins\Plugin;
 class ScriptLoaderNext implements Plugin, CommandListener {
 	// Constants
 	const PLUGIN_ID                     = 150;
-	const PLUGIN_VERSION                = 1.0;
+	const PLUGIN_VERSION                = 1.1;
 	const PLUGIN_NAME                   = 'ScriptLoaderNext';
 	const PLUGIN_AUTHOR                 = 'jonthekiller';
 	const SETTING_SCRIPTRELOADAUTHLEVEL = 'Auth level for the scriptreload command';
@@ -143,7 +143,8 @@ class ScriptLoaderNext implements Plugin, CommandListener {
 	 * @param Player $player
 	 */
 	public function onCommandScriptReload(array $chatCallback, Player $player) {
-		$authLevel = $this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_SCRIPTRELOADAUTHLEVEL);
+		$authLevelName = $this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_SCRIPTRELOADAUTHLEVEL);
+		$authLevel = $this->maniaControl->getAuthenticationManager()->getAuthLevel($authLevelName);
 		if (!$this->maniaControl->getAuthenticationManager()->checkRight($player, $authLevel)) {
 			$this->maniaControl->getAuthenticationManager()->sendNotAllowed($player);
 			return;
@@ -174,7 +175,8 @@ class ScriptLoaderNext implements Plugin, CommandListener {
 	 * @param Player $player
 	 */
 	public function onCommandScriptLoad(array $chatCallback, Player $player) {
-		$authLevel = $this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_SCRIPTLOADAUTHLEVEL);
+		$authLevelName = $this->maniaControl->getSettingManager()->getSettingValue($this, self::SETTING_SCRIPTRELOADAUTHLEVEL);
+		$authLevel = $this->maniaControl->getAuthenticationManager()->getAuthLevel($authLevelName);
 		if (!$this->maniaControl->getAuthenticationManager()->checkRight($player, $authLevel)) {
 			$this->maniaControl->getAuthenticationManager()->sendNotAllowed($player);
 			return;
